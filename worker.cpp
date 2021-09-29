@@ -32,6 +32,16 @@ struct Task {
         : no_(no), x_(x), y_(y), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
 };
 
+struct Location {
+    int x_, y_;
+
+    Location() {}
+
+    Location(int x, int y) : x_(x), y_(y) {}
+};
+
+Location depot, preLoc;
+
 int get_vehicle_capacity(char vehicleType)
 {
     int ret;
@@ -75,6 +85,17 @@ void __extract_func(char msg[], std::stack<int> &args)
     }
 }
 
+/* @depot rpc: x, y */
+void _extract_depot_rpc(char msg[])
+{
+    char *splitPtr;
+
+    splitPtr = strrchr(msg, ',');
+    depot.y_ = atoi(splitPtr+1);
+    *splitPtr = '\0';
+    depot.x_ = atoi(msg);
+}
+
 /* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
 void _extract_reply_rpc(char msg[], std::stack<int> &args)
 {
@@ -87,6 +108,15 @@ void _task_assignment_copy_from_args(std::stack<int> &args, Task &t)
     t.no_ = args.top(); args.pop(); t.x_ = args.top(); args.pop(); t.y_ = args.top(); args.pop();
     t.demand_ = args.top(); args.pop(); t.readyTime_ = args.top(); args.pop();
     t.dueTime_ = args.top(); args.pop(); t.serviceTime_ = args.top(); args.pop();
+}
+
+/* back to depot */
+void back_to_depot(const Task &t, int &restCap, const int &vehcCap)
+{
+    this_thread::sleep_for(chrono::milliseconds((abs(t.x_-depot.x_) + abs(t.y_-depot.y_))*10));
+    restCap = vehcCap;
+    preLoc = depot;
+    printf("back to depot (%d,%d)\n", depot.x_, depot.y_);
 }
 
 int main(int argc, char const *argv[])
@@ -131,6 +161,12 @@ int main(int argc, char const *argv[])
     int vehcCap = get_vehicle_capacity(argv[3][0]);
     int restCap = vehcCap;
 
+    /* extract the location of depot */
+    read(masterSock, buf, BUF_SIZE);
+    _extract_depot_rpc(buf);
+    preLoc = depot;
+    printf("srcLoc..(%d,%d)\n", preLoc.x_, preLoc.y_);
+
     while(true) {
         _generate_request_rpc(buf, t, restCap);
         write(masterSock, buf, sizeof(buf));
@@ -139,27 +175,23 @@ int main(int argc, char const *argv[])
         _task_assignment_copy_from_args(args, t);
 
         if(t.no_ > 0) {     /* regular task */
-            printf("doing the task %d\n", t.no_);
-            this_thread::sleep_for(chrono::milliseconds(t.serviceTime_));
-            if(restCap >= t.demand_) {    /* can handle all */
-                restCap -= t.demand_;
-                t.demand_ = 0;
-                printf("task %d done\n", t.no_);
-            }
-            else {
-                t.demand_ -= restCap;
-                restCap = 0;
-                printf("task %d rest\n", t.no_);
-            }
+            printf("go to (%d,%d) doing the task %d\n", t.x_, t.y_, t.no_);
+            /* the travel time + the service time */
+            this_thread::sleep_for(chrono::milliseconds(t.serviceTime_ + (abs(t.x_-preLoc.x_) + abs(t.y_-preLoc.y_)))*10);
+            restCap -= t.demand_;
+            t.demand_ = 0;
+            printf("task %d done\n", t.no_);
             if(restCap == 0) {  /* should back to depot */
-                this_thread::sleep_for(chrono::milliseconds(500));
-                restCap = vehcCap;
-                printf("back to depot\n");
+                back_to_depot(t, restCap, vehcCap);
             }
             printf("----------------------\n");
         }
+        else if(t.no_ == 0) {   /* force back to depot */
+            back_to_depot(t, restCap, vehcCap);
+            printf("back to depot\n");
+        }
         else {
-            printf("noting to do now\n");
+            printf("noting to do now, back to depot\n");
             break;
         }
     }

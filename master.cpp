@@ -12,6 +12,7 @@
 #include <vector>
 #include <queue>
 #include <stack>
+#include <set>
 
 #define BUF_SIZE 256
 
@@ -33,13 +34,44 @@ struct Task {
         : no_(no), x_(x), y_(y), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
 };
 
+struct TaskCmp : public std::binary_function<Task, Task, bool>
+{
+    bool operator() (const Task &lhs, const Task &rhs) const {
+        if(lhs.readyTime_ < rhs.readyTime_) {
+            return true;
+        }
+        else if(lhs.readyTime_ == rhs.readyTime_) {
+            return lhs.dueTime_<rhs.dueTime_ ? true: false;
+        }
+        else {
+            return false;
+        }
+    }
+};
+
+struct Location {
+    int x_, y_;
+
+    Location() {}
+
+    Location(int x, int y) : x_(x), y_(y) {}
+};
+
 std::mutex mtx;
 /* 任务队列 */
-std::queue<Task> taskQ;
+std::set<Task, TaskCmp> taskQ;
+/* the location of depot */
+Location depot;
 
 /* 客户数量 */
 int workerNum = 0;
 const int workerNumLimt = 3;
+
+/* @depot rpc: x, y */
+void _generate_depot_rpc(char msg[])
+{
+    sprintf(msg, "%d,%d", depot.x_, depot.y_);
+}
 
 /* for various kinds extraction */
 void __extract_func(char msg[], std::stack<int> &args)
@@ -82,12 +114,19 @@ void scan_from_csv()
 
     if( (fp=fopen("data.csv", "r")) ) {
         fseek(fp, 66L, SEEK_SET);   /* locate the second line */
+        /* get the location of depot */
+        fgets(buf, BUF_SIZE, fp);
+        _extract_taskInfo_from_csv(buf, args);
+        args.pop();
+        depot.x_ = args.top(); args.pop();
+        depot.y_ = args.top(); args.pop();
+        while(!args.empty()) { args.pop(); }
+        /* the cluster */
         while( fgets(buf, BUF_SIZE, fp) ) {
             buf[strlen(buf)-1] = '\0';  /* replace the end of str: '\n'->'\0' */
             _extract_taskInfo_from_csv(buf, args);
             _task_assignment_copy_from_args(args, t);
-//            printf("%d,%d,%d,%d,%d,%d,%d\n", no, x, y, demand, readyTime, dueTime, serviceTime);
-            taskQ.push(t);
+            taskQ.insert(t);
         }
     }
 }
@@ -114,6 +153,10 @@ void worker_handle(int sock)
     Task t;
     int vehcCap;
 
+    /* tell worker about depot */
+    _generate_depot_rpc(buf);
+    write(sock, buf, sizeof(buf));
+
     /* 读取该客户端发来的消息 */
     while(true) {
         if(workerNum == workerNumLimt) {
@@ -124,19 +167,19 @@ void worker_handle(int sock)
             _task_assignment_copy_from_args(args, t);
             vehcCap = args.top(); args.pop();
 
-            if(t.no_>0 && t.demand_>0) {    /* task rest */
-                mtx.lock();
-                printf("add task %d\n", t.no_);
-                taskQ.push(t);
-                mtx.unlock();
-            }
-
             if(!taskQ.empty()) {
                 mtx.lock();
-                t = taskQ.front();
+                auto ite = taskQ.begin(); t = *ite;
+                while(vehcCap < t.demand_) {
+                    t = *(++ite);
+                    if(ite == taskQ.end()) {
+                        t = Task(0, -1, -1, 0, 0, 0, 0);
+                        break;
+                    }
+                }
                 _generate_reply_rpc(buf, t);
                 write(sock, buf, sizeof(buf));
-                taskQ.pop();
+                taskQ.erase(ite);
                 printf("task %d dispatch worker %d\n", t.no_, sock);
                 mtx.unlock();
             }
@@ -200,7 +243,6 @@ int main(int argc, char const *argv[])
 
     /* pre-process */
     scan_from_csv();
-    taskQ.pop();
 
     while(true) {
         /* 尝试连接 */
