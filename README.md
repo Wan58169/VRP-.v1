@@ -1,19 +1,20 @@
 # VRP
-read 运输算法.xmind
+read algorithm.xmind
+![alt 图片]()
 
 This program needs one master, three workers.
 
-compile master.cpp: **g++ master.cpp -std=c++11 -o master**
+compile master.cpp: `g++ master.cpp -std=c++11 -o master`
 
-run master: **./master 9022**
+run master: `./master 9022`
   
-compile worker.cpp: **g++ worker.cpp -std=c++11 -o worker**
+compile worker.cpp: `g++ worker.cpp -std=c++11 -o worker`
 
-run workerA: **./worker 127.0.0.1 9022 A**
+run workerA: `./worker 127.0.0.1 9022 A`
 
-run workerB: **./worker 127.0.0.1 9022 B**
+run workerB: `./worker 127.0.0.1 9022 B`
 
-run workerC: **./worker 127.0.0.1 9022 C**
+run workerC: `./worker 127.0.0.1 9022 C`
 
   
 
