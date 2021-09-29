@@ -11,7 +11,7 @@
 #include <future>
 #include <vector>
 #include <queue>
-#include <string>
+#include <stack>
 
 #define BUF_SIZE 256
 
@@ -19,10 +19,18 @@ typedef struct sockaddr_in Addr;
 typedef socklen_t AddrSize;
 
 struct Task {
-    int taskNo;
-    int taskSize;
+    int no_;
+    int x_;
+    int y_;
+    int demand_;
+    int readyTime_;
+    int dueTime_;
+    int serviceTime_;
 
-    Task(int no, int size) : taskNo(no), taskSize(size) {}
+    Task() {}
+
+    Task(int no, int x, int y, int demand, int readyTime, int dueTime, int serviceTime)
+        : no_(no), x_(x), y_(y), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
 };
 
 std::mutex mtx;
@@ -33,22 +41,67 @@ std::queue<Task> taskQ;
 int workerNum = 0;
 const int workerNumLimt = 3;
 
-/* @request rpc: taskNo, taskSize, vehcCap */
-void extract_request_rpc(char msg[], int &taskNo, int &taskSize, int &vehcCap)
+/* for various kinds extraction */
+void __extract_func(char msg[], std::stack<int> &args)
 {
-    char *splitPtr = strrchr(msg, ',');
-    vehcCap = atoi(splitPtr+1);
-    *splitPtr = '\0';
-    splitPtr = strrchr(msg, ',');
-    taskSize = atoi(splitPtr+1);
-    *splitPtr = '\0';
-    taskNo = atoi(msg);
+    char *splitPtr;
+
+    while(true) {
+        splitPtr = strrchr(msg, ',');
+        if(splitPtr == NULL) {
+            args.push(atoi(msg));
+            break;
+        }
+        args.push(atoi(splitPtr+1));
+        *splitPtr = '\0';
+    }
 }
 
-/* @reply rpc: taskNo, taskSize */
-void generate_reply_rpc(char msg[], const int taskNo, const int taskSize)
+/* @task: no, x, y, demand, readyTime, dueTime, serviceTime */
+void _extract_taskInfo_from_csv(char msg[], std::stack<int> &args)
 {
-    sprintf(msg, "%d,%d", taskNo, taskSize);
+    __extract_func(msg, args);
+}
+
+/* task assignment copy */
+void _task_assignment_copy_from_args(std::stack<int> &args, Task &t)
+{
+    t.no_ = args.top(); args.pop(); t.x_ = args.top(); args.pop(); t.y_ = args.top(); args.pop();
+    t.demand_ = args.top(); args.pop(); t.readyTime_ = args.top(); args.pop();
+    t.dueTime_ = args.top(); args.pop(); t.serviceTime_ = args.top(); args.pop();
+}
+
+/* prepare data */
+void scan_from_csv()
+{
+    /* data set */
+    FILE *fp;
+    char buf[BUF_SIZE];
+    std::stack<int> args;      /* @args: no, x, y, demand, readyTime, dueTime, serviceTime */
+    Task t;
+
+    if( (fp=fopen("data.csv", "r")) ) {
+        fseek(fp, 66L, SEEK_SET);   /* locate the second line */
+        while( fgets(buf, BUF_SIZE, fp) ) {
+            buf[strlen(buf)-1] = '\0';  /* replace the end of str: '\n'->'\0' */
+            _extract_taskInfo_from_csv(buf, args);
+            _task_assignment_copy_from_args(args, t);
+//            printf("%d,%d,%d,%d,%d,%d,%d\n", no, x, y, demand, readyTime, dueTime, serviceTime);
+            taskQ.push(t);
+        }
+    }
+}
+
+/* @request rpc: no, x, y, demand, readyTime, dueTime, serviceTime, vehcCap */
+void _extract_request_rpc(char msg[], std::stack<int> &args)
+{
+    __extract_func(msg, args);
+}
+
+/* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
+void _generate_reply_rpc(char msg[], const Task &t)
+{
+    sprintf(msg, "%d,%d,%d,%d,%d,%d,%d", t.no_, t.x_, t.y_, t.demand_, t.readyTime_, t.dueTime_, t.serviceTime_);
 }
 
 /**
@@ -56,8 +109,10 @@ void generate_reply_rpc(char msg[], const int taskNo, const int taskSize)
 */
 void worker_handle(int sock)
 {
-    char buf[BUF_SIZE];     /* 消息缓冲区 */
-    int taskNo, taskSize, vehcCap;
+    char buf[BUF_SIZE];
+    std::stack<int> args;
+    Task t;
+    int vehcCap;
 
     /* 读取该客户端发来的消息 */
     while(true) {
@@ -65,26 +120,30 @@ void worker_handle(int sock)
             if(read(sock, buf, BUF_SIZE) == 0) {
                 break;
             }
-            extract_request_rpc(buf, taskNo, taskSize, vehcCap);
+            _extract_request_rpc(buf, args);
+            _task_assignment_copy_from_args(args, t);
+            vehcCap = args.top(); args.pop();
 
-            if(taskNo>0 && taskSize>0) {    /* task rest */
+            if(t.no_>0 && t.demand_>0) {    /* task rest */
                 mtx.lock();
-                taskQ.push(Task(taskNo, taskSize));
+                printf("add task %d\n", t.no_);
+                taskQ.push(t);
                 mtx.unlock();
-                printf("add task %d, size %d\n", taskNo, taskSize);
             }
 
             if(!taskQ.empty()) {
                 mtx.lock();
-                Task t = taskQ.front();
-                generate_reply_rpc(buf, t.taskNo, t.taskSize);
+                t = taskQ.front();
+                _generate_reply_rpc(buf, t);
                 write(sock, buf, sizeof(buf));
-                printf("dispatch task %d, size %d to worker %d\n", t.taskNo, t.taskSize, sock);
                 taskQ.pop();
+                printf("task %d dispatch worker %d\n", t.no_, sock);
                 mtx.unlock();
             }
             else {
-                write(sock, "-1,0", 5);
+                Task endTask(-1, -1, -1, 0, 0, 0, 0);
+                _generate_reply_rpc(buf, endTask);
+                write(sock, buf, sizeof(buf));
                 printf("no task to do, worker %d\n", sock);
             }
         }
@@ -139,9 +198,9 @@ int main(int argc, char const *argv[])
     Addr workerAddr;
     AddrSize workerAddrSize;
 
-    for(int i=1; i<=30; i++) {
-        taskQ.push(Task(i, rand()%10+1));
-    }
+    /* pre-process */
+    scan_from_csv();
+    taskQ.pop();
 
     while(true) {
         /* 尝试连接 */

@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 #include <iostream>
 #include <thread>
+#include <stack>
 
 typedef struct sockaddr_in Addr;
 typedef socklen_t AddrSize;
@@ -16,19 +17,34 @@ typedef socklen_t AddrSize;
 using namespace std;
 #define BUF_SIZE 256
 
+struct Task {
+    int no_;
+    int x_;
+    int y_;
+    int demand_;
+    int readyTime_;
+    int dueTime_;
+    int serviceTime_;
+
+    Task(){}
+
+    Task(int no, int x, int y, int demand, int readyTime, int dueTime, int serviceTime)
+        : no_(no), x_(x), y_(y), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
+};
+
 int get_vehicle_capacity(char vehicleType)
 {
     int ret;
 
     switch(vehicleType) {
         case 'A':
-            ret = 3;
+            ret = 90;
             break;
         case 'B':
-            ret = 5;
+            ret = 150;
             break;
         case 'C':
-            ret = 8;
+            ret = 240;
             break;
         default:
             ret = -1;
@@ -37,19 +53,40 @@ int get_vehicle_capacity(char vehicleType)
     return ret;
 }
 
-/* @request rpc: taskNo, taskSize, vehicleCap */
-void generate_request_rpc(char msg[], const int taskNo, const int taskSize, const int vehcCap)
+/* @request rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap */
+void _generate_request_rpc(char msg[], const Task &t, const int vehcCap)
 {
-    sprintf(msg, "%d,%d,%d", taskNo, taskSize, vehcCap);
+    sprintf(msg, "%d,%d,%d,%d,%d,%d,%d,%d", t.no_, t.x_, t.y_, t.demand_, t.readyTime_, t.dueTime_, t.serviceTime_, vehcCap);
 }
 
-/* @reply rpc: taskNo,taskSize */
-void extract_reply_rpc(char msg[], int &taskNo, int &taskSize)
+/* for various kinds extraction */
+void __extract_func(char msg[], std::stack<int> &args)
 {
-    char *splitPtr = strchr(msg, ',');
-    taskSize = atoi(splitPtr+1);
-    *splitPtr = '\0';
-    taskNo = atoi(msg);
+    char *splitPtr;
+
+    while(true) {
+        splitPtr = strrchr(msg, ',');
+        if(splitPtr == NULL) {
+            args.push(atoi(msg));
+            break;
+        }
+        args.push(atoi(splitPtr+1));
+        *splitPtr = '\0';
+    }
+}
+
+/* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
+void _extract_reply_rpc(char msg[], std::stack<int> &args)
+{
+    __extract_func(msg, args);
+}
+
+/* task assignment copy */
+void _task_assignment_copy_from_args(std::stack<int> &args, Task &t)
+{
+    t.no_ = args.top(); args.pop(); t.x_ = args.top(); args.pop(); t.y_ = args.top(); args.pop();
+    t.demand_ = args.top(); args.pop(); t.readyTime_ = args.top(); args.pop();
+    t.dueTime_ = args.top(); args.pop(); t.serviceTime_ = args.top(); args.pop();
 }
 
 int main(int argc, char const *argv[])
@@ -89,33 +126,41 @@ int main(int argc, char const *argv[])
     }
 
     char buf[BUF_SIZE];
-    int taskNo = -1;
-    int taskSize = 0;
+    std::stack<int> args;
+    Task t(-1, -1, -1, 0, 0, 0, 0);
     int vehcCap = get_vehicle_capacity(argv[3][0]);
+    int restCap = vehcCap;
 
     while(true) {
-        /* @request rpc: taskNo, taskSize, vehicleCap */
-        generate_request_rpc(buf, taskNo, taskSize, vehcCap);
+        _generate_request_rpc(buf, t, restCap);
         write(masterSock, buf, sizeof(buf));
         read(masterSock, buf, BUF_SIZE);
-        /* @reply rpc: taskNo,taskSize */
-        extract_reply_rpc(buf, taskNo, taskSize);
+        _extract_reply_rpc(buf, args);
+        _task_assignment_copy_from_args(args, t);
 
-        if(taskNo>0 && taskSize>0) {
-            printf("I'm %d, working task %d, size %d\n", masterSock, taskNo, taskSize);
-            this_thread::sleep_for(chrono::seconds(1));
-            taskSize -= vehcCap;
-            printf("task %d, rest %d\n", taskNo, taskSize);
-            if(taskSize <= 0) { /* task done */
-                taskNo = -1;
-                taskSize = 0;
+        if(t.no_ > 0) {     /* regular task */
+            printf("doing the task %d\n", t.no_);
+            this_thread::sleep_for(chrono::milliseconds(t.serviceTime_));
+            if(restCap >= t.demand_) {    /* can handle all */
+                restCap -= t.demand_;
+                t.demand_ = 0;
+                printf("task %d done\n", t.no_);
             }
+            else {
+                t.demand_ -= restCap;
+                restCap = 0;
+                printf("task %d rest\n", t.no_);
+            }
+            if(restCap == 0) {  /* should back to depot */
+                this_thread::sleep_for(chrono::milliseconds(500));
+                restCap = vehcCap;
+                printf("back to depot\n");
+            }
+            printf("----------------------\n");
         }
-        else if(taskNo==-1 && taskSize==0) {
+        else {
             printf("noting to do now\n");
             break;
-        } else {
-
         }
     }
 
