@@ -1,6 +1,6 @@
 # VRP
 read algorithm.xmind
-![alt 图片]()
+![alt 图片](https://github.com/Wan58169/VRP/blob/master/algorithm.png)
 
 This program needs one master, three workers.
 
