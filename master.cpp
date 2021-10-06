@@ -2,22 +2,28 @@
 // Created by WAN on 2021/9/19.
 //
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <iostream>
 #include <thread>
-#include <future>
 #include <vector>
 #include <queue>
 #include <stack>
 #include <set>
+#include <condition_variable>
+#include <future>
+#include <mutex>
 
 #define BUF_SIZE 256
 
 typedef struct sockaddr_in Addr;
 typedef socklen_t AddrSize;
+
+const int TaskEnd = -1;
+const int TaskWait = 0;
 
 struct Task {
     int no_;
@@ -32,6 +38,19 @@ struct Task {
 
     Task(int no, int x, int y, int demand, int readyTime, int dueTime, int serviceTime)
         : no_(no), x_(x), y_(y), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
+
+    void set_task_type(int type) {
+        switch(type) {
+            case TaskEnd:
+                no_ = -1;
+                break;
+            case TaskWait:
+                no_ = 0;
+                break;
+            default:
+                break;
+        }
+    }
 };
 
 struct TaskCmp : public std::binary_function<Task, Task, bool>
@@ -48,6 +67,94 @@ struct TaskCmp : public std::binary_function<Task, Task, bool>
         }
     }
 };
+/* timer */
+std::chrono::steady_clock::time_point StartTime;
+
+/* TaskQueue and mutex */
+std::mutex Mtx;
+std::multiset<Task, TaskCmp> TaskQ;
+
+/* thread sync */
+std::mutex CvMtx;
+std::condition_variable Cv;
+int WeakUpNum = 0;
+
+/* the number of workers */
+int WorkerNum = 0;
+int WorkerNumLimt = 0;
+
+class Method {
+public:
+    virtual void run(int, Task&, long long, int)=0;
+};
+
+class TimeFirstMethod : public Method {
+public:
+    void run(int sock, Task &t, long long timeStamp, int vehcCap) {
+        auto targetIte = TaskQ.begin();
+        t = *targetIte;
+        TaskQ.erase(targetIte);
+        printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.no_, t.readyTime_, t.dueTime_, sock, timeStamp);
+        if(timeStamp>=t.readyTime_ && timeStamp<=t.dueTime_) { printf("right time\n"); }
+        else { printf("wrong time\n"); }
+    }
+};
+
+class XYFirstMethod : public Method {
+public:
+    void run(int sock, Task &t, long long timeStamp, int vehcCap) {
+        auto maxReadyTimeIte = TaskQ.begin();
+        /* locate the maximum readyTime of task, unreachable! */
+        while(true) {
+            if(maxReadyTimeIte->readyTime_>timeStamp || maxReadyTimeIte==TaskQ.end()) { break; }
+            else { maxReadyTimeIte++; }
+        }
+        /* find the nearest task and this worker can handle */
+        auto nearestIte = TaskQ.begin();
+        int nearestDist = INT32_MAX;
+        for(auto ite=TaskQ.begin(); ite!=maxReadyTimeIte; ite++) {
+            if(ite->readyTime_<=timeStamp && ite->dueTime_>=timeStamp) {    /* available task */
+                int dist = abs(ite->x_-t.x_) + abs(ite->y_-t.y_);
+                if(dist<nearestDist && ite->demand_<=vehcCap) { nearestDist = dist; nearestIte = ite; }
+            }
+        }
+        t = *nearestIte;
+        TaskQ.erase(nearestIte);
+        printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.no_, t.readyTime_, t.dueTime_, sock, timeStamp);
+        if(timeStamp>=t.readyTime_ && timeStamp<=t.dueTime_) { printf("right time\n"); }
+        else { printf("wrong time\n"); }
+    }
+};
+
+class DispatchAlgorithm {
+private:
+    Method *impl_;
+
+public:
+    DispatchAlgorithm() {}
+
+    DispatchAlgorithm(Method *impl) : impl_(impl) {}
+
+    void run(int sock, Task &t, int timeStamp, int vehcCap) {
+        impl_->run(sock, t, timeStamp, vehcCap);
+    }
+};
+DispatchAlgorithm *DpAlg = nullptr;
+
+/* choose the type of dispatch algorithm */
+void choose_dispatch_algorithm(char type)
+{
+    switch(type) {
+        case 'A':
+            DpAlg = new DispatchAlgorithm(new TimeFirstMethod());
+            break;
+        case 'B':
+            DpAlg = new DispatchAlgorithm(new XYFirstMethod());
+            break;
+        default:
+            break;
+    }
+}
 
 struct Location {
     int x_, y_;
@@ -56,16 +163,20 @@ struct Location {
 
     Location(int x, int y) : x_(x), y_(y) {}
 };
-
-std::mutex mtx;
-/* 任务队列 */
-std::set<Task, TaskCmp> taskQ;
 /* the location of depot */
 Location depot;
 
-/* 客户数量 */
-int workerNum = 0;
-const int workerNumLimt = 3;
+/* timer start thread */
+void timer_run()
+{
+    while(WorkerNum != WorkerNumLimt)
+        ;
+    StartTime = std::chrono::steady_clock::now();
+    Cv.notify_all();
+    while(WeakUpNum != WorkerNumLimt)
+        ;
+    printf("notify all\n");
+}
 
 /* @depot rpc: x, y */
 void _generate_depot_rpc(char msg[])
@@ -126,7 +237,7 @@ void scan_from_csv()
             buf[strlen(buf)-1] = '\0';  /* replace the end of str: '\n'->'\0' */
             _extract_taskInfo_from_csv(buf, args);
             _task_assignment_copy_from_args(args, t);
-            taskQ.insert(t);
+            TaskQ.insert(t);
         }
     }
 }
@@ -143,9 +254,7 @@ void _generate_reply_rpc(char msg[], const Task &t)
     sprintf(msg, "%d,%d,%d,%d,%d,%d,%d", t.no_, t.x_, t.y_, t.demand_, t.readyTime_, t.dueTime_, t.serviceTime_);
 }
 
-/**
-* 客户端线程
-*/
+/*  */
 void worker_handle(int sock)
 {
     char buf[BUF_SIZE];
@@ -157,61 +266,64 @@ void worker_handle(int sock)
     _generate_depot_rpc(buf);
     write(sock, buf, sizeof(buf));
 
-    /* 读取该客户端发来的消息 */
-    while(true) {
-        if(workerNum == workerNumLimt) {
-            if(read(sock, buf, BUF_SIZE) == 0) {
-                break;
-            }
-            _extract_request_rpc(buf, args);
-            _task_assignment_copy_from_args(args, t);
-            vehcCap = args.top(); args.pop();
+    {
+        std::unique_lock<std::mutex> lk(CvMtx);
+//        printf("I'm %d get lock\n", sock);
+        Cv.wait(lk);
+    }
+//    printf("I'm %d weak up\n", sock);
+    WeakUpNum++;
 
-            if(!taskQ.empty()) {
-                mtx.lock();
-                auto ite = taskQ.begin(); t = *ite;
-                while(vehcCap < t.demand_) {
-                    t = *(++ite);
-                    if(ite == taskQ.end()) {
-                        t = Task(0, -1, -1, 0, 0, 0, 0);
-                        break;
-                    }
-                }
-                _generate_reply_rpc(buf, t);
-                write(sock, buf, sizeof(buf));
-                taskQ.erase(ite);
-                printf("task %d dispatch worker %d\n", t.no_, sock);
-                mtx.unlock();
-            }
-            else {
-                Task endTask(-1, -1, -1, 0, 0, 0, 0);
-                _generate_reply_rpc(buf, endTask);
-                write(sock, buf, sizeof(buf));
-                printf("no task to do, worker %d\n", sock);
-            }
+    while(true) {
+        if(read(sock, buf, BUF_SIZE) == 0) {
+            break;
         }
+        _extract_request_rpc(buf, args);
+        _task_assignment_copy_from_args(args, t);
+        vehcCap = args.top(); args.pop();
+
+        Mtx.lock();
+        if(!TaskQ.empty()) {
+            auto timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
+            while(true) {
+                if(timeStamp < TaskQ.begin()->readyTime_) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                    timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
+                }
+                else {
+                    break;
+                }
+            }
+            DpAlg->run(sock, t, timeStamp, vehcCap);
+        }
+        else {
+            t.set_task_type(TaskEnd);
+            printf("no task to do, worker %d\n", sock);
+        }
+        Mtx.unlock();
+        _generate_reply_rpc(buf, t);
+        write(sock, buf, sizeof(buf));
     }
 
     printf("worker %d disconnect!\n", sock);
+    Mtx.lock();
+    WorkerNum--;
+    Mtx.unlock();
     close(sock);
 }
 
 int main(int argc, char const *argv[])
 {
-    /* 声明服务器套接字 */
     int masterSock;
-
-    /* 声明服务器地址 */
     Addr masterAddr;
     AddrSize masterAddrSize = sizeof(masterAddr);
 
-    /* 无效输入 */
-    if(argc != 2) {
-        printf("Usage: %s <port>\n", argv[0]);
+    /* unvalid input */
+    if(argc != 4) {
+        printf("Usage: %s <port> <type> <workers>\n", argv[0]);
         exit(1);
     }
 
-    /* 创建服务器套接字 */
     masterSock = socket(PF_INET, SOCK_STREAM, 0);
     if(masterSock == -1) {
         printf("sock error\n");
@@ -223,42 +335,45 @@ int main(int argc, char const *argv[])
     masterAddr.sin_addr.s_addr = htonl(INADDR_ANY);
     masterAddr.sin_port = htons(atoi(argv[1]));
 
-    /* 准备服务器套接字 */
     if(bind(masterSock, (struct sockaddr*)&masterAddr, masterAddrSize) == -1) {
         printf("bind error\n");
         exit(1);
     }
 
-    /* 监听端口 */
     if(listen(masterSock, BUF_SIZE) == -1) {
         printf("listen error\n");
         exit(1);
     }
 
-    /* 客户端套接字 */
     int workerSock;
-    /* 客户端地址 */
     Addr workerAddr;
     AddrSize workerAddrSize;
 
     /* pre-process */
     scan_from_csv();
 
-    while(true) {
-        /* 尝试连接 */
+    /* choose the type of dispatch algorithm */
+    choose_dispatch_algorithm(argv[2][0]);
+
+    /* set the WorkerNumLimt */
+    WorkerNumLimt = atoi(argv[3]);
+
+    for(int i=0; i<WorkerNumLimt; i++) {
+        /* try to accept the request */
         workerSock = accept(masterSock, (struct sockaddr*)&workerAddr, &workerAddrSize);
         if(workerSock == -1) {
             printf("accept error");
             exit(1);
         }
-        ++workerNum;
+        ++WorkerNum;
         printf("new worker %d connected\n", workerSock);
-
-        /* 为每个连接创建处理线程 */
-        std::thread t(worker_handle, workerSock);
-        t.detach();
+        /* create thread for worker */
+        std::thread(worker_handle, workerSock).detach();
     }
-    close(masterSock);
+    /* run timer */
+    std::async(std::launch::async, timer_run);
+    while(true)
+        ;
 
     return 0;
 }

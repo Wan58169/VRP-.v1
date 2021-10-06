@@ -113,7 +113,7 @@ void _task_assignment_copy_from_args(std::stack<int> &args, Task &t)
 /* back to depot */
 void back_to_depot(const Task &t, int &restCap, const int &vehcCap)
 {
-    this_thread::sleep_for(chrono::milliseconds((abs(t.x_-depot.x_) + abs(t.y_-depot.y_))*10));
+    this_thread::sleep_for(chrono::milliseconds(t.serviceTime_));
     restCap = vehcCap;
     preLoc = depot;
     printf("back to depot (%d,%d)\n", depot.x_, depot.y_);
@@ -156,16 +156,16 @@ int main(int argc, char const *argv[])
     }
 
     char buf[BUF_SIZE];
-    std::stack<int> args;
-    Task t(-1, -1, -1, 0, 0, 0, 0);
-    int vehcCap = get_vehicle_capacity(argv[3][0]);
-    int restCap = vehcCap;
-
     /* extract the location of depot */
     read(masterSock, buf, BUF_SIZE);
     _extract_depot_rpc(buf);
     preLoc = depot;
     printf("srcLoc..(%d,%d)\n", preLoc.x_, preLoc.y_);
+    Task t(-1, depot.x_, depot.y_, 0, 0, 0, 0);
+
+    std::stack<int> args;
+    int vehcCap = get_vehicle_capacity(argv[3][0]);
+    int restCap = vehcCap;
 
     while(true) {
         _generate_request_rpc(buf, t, restCap);
@@ -175,11 +175,12 @@ int main(int argc, char const *argv[])
         _task_assignment_copy_from_args(args, t);
 
         if(t.no_ > 0) {     /* regular task */
-            printf("go to (%d,%d) doing the task %d\n", t.x_, t.y_, t.no_);
+            printf("go to (%d,%d) doing the task %d, serviceTime %d\n", t.x_, t.y_, t.no_, t.serviceTime_);
             /* the travel time + the service time */
-            this_thread::sleep_for(chrono::milliseconds(t.serviceTime_ + (abs(t.x_-preLoc.x_) + abs(t.y_-preLoc.y_)))*10);
+            this_thread::sleep_for(chrono::milliseconds(t.serviceTime_));
             restCap -= t.demand_;
             t.demand_ = 0;
+            preLoc.x_ = t.x_; preLoc.y_ = t.y_;
             printf("task %d done\n", t.no_);
             if(restCap == 0) {  /* should back to depot */
                 back_to_depot(t, restCap, vehcCap);
@@ -188,10 +189,9 @@ int main(int argc, char const *argv[])
         }
         else if(t.no_ == 0) {   /* force back to depot */
             back_to_depot(t, restCap, vehcCap);
-            printf("back to depot\n");
         }
         else {
-            printf("noting to do now, back to depot\n");
+            printf("noting to do now, back to depot (%d,%d)\n", depot.x_, depot.y_);
             break;
         }
     }
