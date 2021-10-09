@@ -1,128 +1,87 @@
 //
 // Created by WAN on 2021/9/19.
 //
-#include <stdio.h>
-#include <string.h>
+#include "rpc.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <iostream>
+
 #include <thread>
 #include <vector>
 #include <queue>
-#include <stack>
-#include <set>
+#include <vector>
 #include <condition_variable>
-#include <future>
 #include <mutex>
-
-#define BUF_SIZE 256
 
 typedef struct sockaddr_in Addr;
 typedef socklen_t AddrSize;
 
-const int TaskEnd = -1;
-const int TaskWait = 0;
+/* the location of depot */
+static Location Depot;
 
-struct Task {
-    int no_;
-    int x_;
-    int y_;
-    int demand_;
-    int readyTime_;
-    int dueTime_;
-    int serviceTime_;
-
-    Task() {}
-
-    Task(int no, int x, int y, int demand, int readyTime, int dueTime, int serviceTime)
-        : no_(no), x_(x), y_(y), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
-
-    void set_task_type(int type) {
-        switch(type) {
-            case TaskEnd:
-                no_ = -1;
-                break;
-            case TaskWait:
-                no_ = 0;
-                break;
-            default:
-                break;
-        }
-    }
-};
-
-struct TaskCmp : public std::binary_function<Task, Task, bool>
-{
-    bool operator() (const Task &lhs, const Task &rhs) const {
-        if(lhs.readyTime_ < rhs.readyTime_) {
-            return true;
-        }
-        else if(lhs.readyTime_ == rhs.readyTime_) {
-            return lhs.dueTime_<rhs.dueTime_ ? true: false;
-        }
-        else {
-            return false;
-        }
-    }
-};
 /* timer */
-std::chrono::steady_clock::time_point StartTime;
+static std::chrono::steady_clock::time_point StartTime;
 
 /* TaskQueue and mutex */
-std::mutex Mtx;
-std::multiset<Task, TaskCmp> TaskQ;
+static std::mutex Mtx;
+static std::multiset<Task, TaskCmp> TaskQ;
 
 /* thread sync */
-std::mutex CvMtx;
-std::condition_variable Cv;
-int WeakUpNum = 0;
+static std::mutex CvMtx;
+static std::condition_variable Cv;
+static bool Ready = false;
+static int WeakUpNum = 0;
 
 /* the number of workers */
-int WorkerNum = 0;
-int WorkerNumLimt = 0;
+static int WorkerNum = 0;
+static int WorkerNumLimt = 0;
 
 class Method {
 public:
-    virtual void run(int, Task&, long long, int)=0;
+    virtual void run(const int, Task&, const long long, const int)=0;
 };
 
 class TimeFirstMethod : public Method {
 public:
-    void run(int sock, Task &t, long long timeStamp, int vehcCap) {
+    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap) {
+        auto maxReadyTimeIte = TaskQ.begin();
+        /* locate the maximum readyTime of task, unreachable! */
+        while(true) {
+            if(maxReadyTimeIte->get_readyTime()>timeStamp || maxReadyTimeIte==TaskQ.end()) { break; }
+            else { maxReadyTimeIte++; }
+        }
+        /* find the available task */
         auto targetIte = TaskQ.begin();
+        while(targetIte != maxReadyTimeIte) {
+            if(targetIte->get_demand() <= vehcCap) { break; }
+            else { targetIte++; }
+        }
         t = *targetIte;
         TaskQ.erase(targetIte);
-        printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.no_, t.readyTime_, t.dueTime_, sock, timeStamp);
-        if(timeStamp>=t.readyTime_ && timeStamp<=t.dueTime_) { printf("right time\n"); }
-        else { printf("wrong time\n"); }
     }
 };
 
 class XYFirstMethod : public Method {
 public:
-    void run(int sock, Task &t, long long timeStamp, int vehcCap) {
+    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap) {
         auto maxReadyTimeIte = TaskQ.begin();
         /* locate the maximum readyTime of task, unreachable! */
         while(true) {
-            if(maxReadyTimeIte->readyTime_>timeStamp || maxReadyTimeIte==TaskQ.end()) { break; }
+            if(maxReadyTimeIte->get_readyTime()>timeStamp || maxReadyTimeIte==TaskQ.end()) { break; }
             else { maxReadyTimeIte++; }
         }
         /* find the nearest task and this worker can handle */
         auto nearestIte = TaskQ.begin();
         int nearestDist = INT32_MAX;
         for(auto ite=TaskQ.begin(); ite!=maxReadyTimeIte; ite++) {
-            if(ite->readyTime_<=timeStamp && ite->dueTime_>=timeStamp) {    /* available task */
-                int dist = abs(ite->x_-t.x_) + abs(ite->y_-t.y_);
-                if(dist<nearestDist && ite->demand_<=vehcCap) { nearestDist = dist; nearestIte = ite; }
+            if(ite->get_readyTime()<=timeStamp && ite->get_dueTime()>=timeStamp) {    /* available task */
+                int dist = abs(ite->get_x()-t.get_x()) + abs(ite->get_y()-t.get_y());
+                if(dist<nearestDist && ite->get_demand()<=vehcCap) { nearestDist = dist; nearestIte = ite; }
             }
         }
         t = *nearestIte;
         TaskQ.erase(nearestIte);
-        printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.no_, t.readyTime_, t.dueTime_, sock, timeStamp);
-        if(timeStamp>=t.readyTime_ && timeStamp<=t.dueTime_) { printf("right time\n"); }
-        else { printf("wrong time\n"); }
     }
 };
 
@@ -135,7 +94,7 @@ public:
 
     DispatchAlgorithm(Method *impl) : impl_(impl) {}
 
-    void run(int sock, Task &t, int timeStamp, int vehcCap) {
+    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap) {
         impl_->run(sock, t, timeStamp, vehcCap);
     }
 };
@@ -156,153 +115,88 @@ void choose_dispatch_algorithm(char type)
     }
 }
 
-struct Location {
-    int x_, y_;
-
-    Location() {}
-
-    Location(int x, int y) : x_(x), y_(y) {}
-};
-/* the location of depot */
-Location depot;
-
 /* timer start thread */
 void timer_run()
 {
     while(WorkerNum != WorkerNumLimt)
         ;
     StartTime = std::chrono::steady_clock::now();
-    Cv.notify_all();
+    {
+        std::lock_guard<std::mutex> lg(Mtx);
+        Ready = true;
+        Cv.notify_all();
+    }
     while(WeakUpNum != WorkerNumLimt)
         ;
     printf("notify all\n");
 }
 
-/* @depot rpc: x, y */
-void _generate_depot_rpc(char msg[])
+/* tell worker about depot */
+void tell_worker_depot(const int sock, const Location &depot)
 {
-    sprintf(msg, "%d,%d", depot.x_, depot.y_);
-}
-
-/* for various kinds extraction */
-void __extract_func(char msg[], std::stack<int> &args)
-{
-    char *splitPtr;
-
-    while(true) {
-        splitPtr = strrchr(msg, ',');
-        if(splitPtr == NULL) {
-            args.push(atoi(msg));
-            break;
-        }
-        args.push(atoi(splitPtr+1));
-        *splitPtr = '\0';
-    }
-}
-
-/* @task: no, x, y, demand, readyTime, dueTime, serviceTime */
-void _extract_taskInfo_from_csv(char msg[], std::stack<int> &args)
-{
-    __extract_func(msg, args);
-}
-
-/* task assignment copy */
-void _task_assignment_copy_from_args(std::stack<int> &args, Task &t)
-{
-    t.no_ = args.top(); args.pop(); t.x_ = args.top(); args.pop(); t.y_ = args.top(); args.pop();
-    t.demand_ = args.top(); args.pop(); t.readyTime_ = args.top(); args.pop();
-    t.dueTime_ = args.top(); args.pop(); t.serviceTime_ = args.top(); args.pop();
-}
-
-/* prepare data */
-void scan_from_csv()
-{
-    /* data set */
-    FILE *fp;
     char buf[BUF_SIZE];
-    std::stack<int> args;      /* @args: no, x, y, demand, readyTime, dueTime, serviceTime */
-    Task t;
 
-    if( (fp=fopen("data.csv", "r")) ) {
-        fseek(fp, 66L, SEEK_SET);   /* locate the second line */
-        /* get the location of depot */
-        fgets(buf, BUF_SIZE, fp);
-        _extract_taskInfo_from_csv(buf, args);
-        args.pop();
-        depot.x_ = args.top(); args.pop();
-        depot.y_ = args.top(); args.pop();
-        while(!args.empty()) { args.pop(); }
-        /* the cluster */
-        while( fgets(buf, BUF_SIZE, fp) ) {
-            buf[strlen(buf)-1] = '\0';  /* replace the end of str: '\n'->'\0' */
-            _extract_taskInfo_from_csv(buf, args);
-            _task_assignment_copy_from_args(args, t);
-            TaskQ.insert(t);
-        }
-    }
+    _generate_depot_rpc(buf, Depot);
+    write(sock, buf, sizeof(buf));
 }
 
-/* @request rpc: no, x, y, demand, readyTime, dueTime, serviceTime, vehcCap */
-void _extract_request_rpc(char msg[], std::stack<int> &args)
+/* respond to the worker's request */
+void respond_worker(const int sock, char buf[], Task &t, int &vehcCap)
 {
-    __extract_func(msg, args);
+    std::stack<int> args;
+
+    _extract_request_rpc(buf, args);
+    _task_assignment_copy_from_args(args, t);
+    vehcCap = args.top(); args.pop();
 }
 
-/* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
-void _generate_reply_rpc(char msg[], const Task &t)
+/* reply the worker */
+void reply_worker(const int sock, const Task &t)
 {
-    sprintf(msg, "%d,%d,%d,%d,%d,%d,%d", t.no_, t.x_, t.y_, t.demand_, t.readyTime_, t.dueTime_, t.serviceTime_);
+    char buf[BUF_SIZE];
+
+    _generate_reply_rpc(buf, t);
+    write(sock, buf, sizeof(buf));
 }
 
-/*  */
 void worker_handle(int sock)
 {
     char buf[BUF_SIZE];
-    std::stack<int> args;
     Task t;
     int vehcCap;
 
-    /* tell worker about depot */
-    _generate_depot_rpc(buf);
-    write(sock, buf, sizeof(buf));
-
+    tell_worker_depot(sock, Depot);
+    /* wait util timer start */
     {
         std::unique_lock<std::mutex> lk(CvMtx);
-//        printf("I'm %d get lock\n", sock);
-        Cv.wait(lk);
+        Cv.wait(lk, []{ return Ready; });
     }
-//    printf("I'm %d weak up\n", sock);
     WeakUpNum++;
 
     while(true) {
         if(read(sock, buf, BUF_SIZE) == 0) {
             break;
         }
-        _extract_request_rpc(buf, args);
-        _task_assignment_copy_from_args(args, t);
-        vehcCap = args.top(); args.pop();
+        respond_worker(sock, buf, t, vehcCap);
 
         Mtx.lock();
         if(!TaskQ.empty()) {
             auto timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
-            while(true) {
-                if(timeStamp < TaskQ.begin()->readyTime_) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                    timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
-                }
-                else {
-                    break;
-                }
+            while(timeStamp < TaskQ.begin()->get_readyTime()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
             }
             DpAlg->run(sock, t, timeStamp, vehcCap);
+            printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.get_no(), t.get_readyTime(), t.get_dueTime(), sock, timeStamp);
+            if(timeStamp>=t.get_readyTime() && timeStamp<=t.get_dueTime()) { printf("right time\n"); }
+            else { printf("wrong time\n"); }
         }
         else {
-            t.set_task_type(TaskEnd);
+            t = Task(TaskEnd);
             printf("no task to do, worker %d\n", sock);
         }
         Mtx.unlock();
-        _generate_reply_rpc(buf, t);
-        write(sock, buf, sizeof(buf));
+        reply_worker(sock, t);
     }
 
     printf("worker %d disconnect!\n", sock);
@@ -350,13 +244,15 @@ int main(int argc, char const *argv[])
     AddrSize workerAddrSize;
 
     /* pre-process */
-    scan_from_csv();
+    scan_from_csv(TaskQ, Depot);
 
     /* choose the type of dispatch algorithm */
     choose_dispatch_algorithm(argv[2][0]);
 
     /* set the WorkerNumLimt */
     WorkerNumLimt = atoi(argv[3]);
+
+    std::vector<std::thread> threads;
 
     for(int i=0; i<WorkerNumLimt; i++) {
         /* try to accept the request */
@@ -368,12 +264,12 @@ int main(int argc, char const *argv[])
         ++WorkerNum;
         printf("new worker %d connected\n", workerSock);
         /* create thread for worker */
-        std::thread(worker_handle, workerSock).detach();
+        threads.push_back(std::thread(worker_handle, workerSock));
     }
     /* run timer */
-    std::async(std::launch::async, timer_run);
-    while(true)
-        ;
+    threads.push_back(std::thread(timer_run));
+
+    for(auto &v : threads) { v.join(); }
 
     return 0;
 }
