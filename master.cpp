@@ -30,12 +30,12 @@ static std::multiset<Task, TaskCmp> TaskQ;
 /* thread sync */
 static std::mutex CvMtx;
 static std::condition_variable Cv;
-static bool Ready = false;
-static int WeakUpNum = 0;
+static std::atomic<bool> Ready(false);
+static std::atomic<int> WeakUpNum(0);
 
 /* the number of workers */
-static int WorkerNum = 0;
-static int WorkerNumLimt = 0;
+static std::atomic<int> WorkerNum(0);
+static std::atomic<int> WorkerNumLimt(0);
 
 class Method {
 public:
@@ -45,18 +45,7 @@ public:
 class TimeFirstMethod : public Method {
 public:
     void run(const int sock, Task &t, const long long timeStamp, const int vehcCap) {
-        auto maxReadyTimeIte = TaskQ.begin();
-        /* locate the maximum readyTime of task, unreachable! */
-        while(true) {
-            if(maxReadyTimeIte->get_readyTime()>timeStamp || maxReadyTimeIte==TaskQ.end()) { break; }
-            else { maxReadyTimeIte++; }
-        }
-        /* find the available task */
         auto targetIte = TaskQ.begin();
-        while(targetIte != maxReadyTimeIte) {
-            if(targetIte->get_demand() <= vehcCap) { break; }
-            else { targetIte++; }
-        }
         t = *targetIte;
         TaskQ.erase(targetIte);
     }
@@ -85,6 +74,29 @@ public:
     }
 };
 
+class DemandFirstMethod : public Method {
+public:
+    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap) {
+        auto maxReadyTimeIte = TaskQ.begin();
+        /* locate the maximum readyTime of task, unreachable! */
+        while(true) {
+            if(maxReadyTimeIte->get_readyTime()>timeStamp || maxReadyTimeIte==TaskQ.end()) { break; }
+            else { maxReadyTimeIte++; }
+        }
+        /* find the maximum demand task and this worker can handle */
+        auto maxDemandtIte = TaskQ.begin();
+        int maxDemand = -1;
+        for(auto ite=TaskQ.begin(); ite!=maxReadyTimeIte; ite++) {
+            if(ite->get_readyTime()<=timeStamp && ite->get_dueTime()>=timeStamp) {    /* available task */
+                int demand = ite->get_demand();
+                if(demand>maxDemand && demand<=vehcCap) { maxDemandtIte = ite; maxDemand = demand; }
+            }
+        }
+        t = *maxDemandtIte;
+        TaskQ.erase(maxDemandtIte);
+    }
+};
+
 class DispatchAlgorithm {
 private:
     Method *impl_;
@@ -110,7 +122,11 @@ void choose_dispatch_algorithm(char type)
         case 'B':
             DpAlg = new DispatchAlgorithm(new XYFirstMethod());
             break;
+        case 'C':
+            DpAlg = new DispatchAlgorithm(new DemandFirstMethod());
+            break;
         default:
+            printf("unvalid method type\n");
             break;
     }
 }
@@ -169,7 +185,7 @@ void worker_handle(int sock)
     /* wait util timer start */
     {
         std::unique_lock<std::mutex> lk(CvMtx);
-        Cv.wait(lk, []{ return Ready; });
+        Cv.wait(lk, []{ return Ready.load(); });
     }
     WeakUpNum++;
 

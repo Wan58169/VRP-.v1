@@ -3,7 +3,6 @@
 //
 #include "rpc.h"
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -134,7 +133,7 @@ int main(int argc, char const *argv[])
             }
             printf("----------------------\n");
         }
-        else if(t.get_no() == -1) {
+        else if(t.get_no() == TaskEnd) {
             printf("noting to do now, back to depot (%d,%d)\n", depot.get_x(), depot.get_y());
             break;
         }
