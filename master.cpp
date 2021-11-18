@@ -12,6 +12,7 @@
 #include <queue>
 #include <vector>
 #include <condition_variable>
+#include <atomic>
 #include <mutex>
 
 typedef struct sockaddr_in Addr;
@@ -45,11 +46,6 @@ const float KilmsCostVct[] = {0, 0.85, 1.15, 1.50};
 const float DotsCostVct[] = {0, 15, 11.5, 8.5};
 
 class Method {
-public:
-    virtual void run(const int, Task&, const long long, const int, const int)=0;
-};
-
-class XYFirstMethod : public Method {
 public:
     void run(const int sock, Task &t, const long long timeStamp, const int vehcCap, const int kilms) {
         auto maxReadyTimeIte = TaskQ.begin();
@@ -91,39 +87,7 @@ public:
     }
 };
 
-class DispatchAlgorithm {
-private:
-    Method *impl_;
-
-public:
-    DispatchAlgorithm() {}
-
-    DispatchAlgorithm(Method *impl) : impl_(impl) {}
-
-    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap, const int kilms) {
-        impl_->run(sock, t, timeStamp, vehcCap, kilms);
-    }
-};
-DispatchAlgorithm *DpAlg = nullptr;
-
-/* choose the type of dispatch algorithm */
-void choose_dispatch_algorithm(char type)
-{
-    switch(type) {
-        case 'A':
-            DpAlg = new DispatchAlgorithm(new TimeFirstMethod());
-            break;
-        case 'B':
-            DpAlg = new DispatchAlgorithm(new XYFirstMethod());
-            break;
-        case 'C':
-            DpAlg = new DispatchAlgorithm(new DemandFirstMethod());
-            break;
-        default:
-            printf("unvalid method type\n");
-            break;
-    }
-}
+static Method method;
 
 /* timer start thread */
 void timer_run()
@@ -197,7 +161,7 @@ void worker_handle(int sock)
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
             }
-            DpAlg->run(sock, t, timeStamp, vehcCap, kilms);
+            method.run(sock, t, timeStamp, vehcCap, kilms);
             printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.get_no(), t.get_readyTime(), t.get_dueTime(), sock, timeStamp);
             if(timeStamp>=t.get_readyTime() && timeStamp<=t.get_dueTime()) { printf("right time\n"); }
             else { printf("wrong time\n"); }
@@ -261,8 +225,8 @@ int main(int argc, char const *argv[])
     AddrSize masterAddrSize = sizeof(masterAddr);
 
     /* unvalid input */
-    if(argc != 4) {
-        printf("Usage: %s <port> <type> <workers>\n", argv[0]);
+    if(argc != 3) {
+        printf("Usage: %s <port> <workers>\n", argv[0]);
         exit(1);
     }
 
@@ -294,11 +258,8 @@ int main(int argc, char const *argv[])
     /* pre-process */
     scan_from_csv(TaskQ, Depot);
 
-    /* choose the type of dispatch algorithm */
-    choose_dispatch_algorithm(argv[2][0]);
-
     /* set the WorkerNumLimt */
-    WorkerNumLimt = atoi(argv[3]);
+    WorkerNumLimt = atoi(argv[2]);
 
     std::vector<std::thread> threads;
 
