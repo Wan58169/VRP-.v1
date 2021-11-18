@@ -15,11 +15,24 @@
 
 const int TaskEnd = -1;
 
+class Location {
+private:
+    int x_, y_;
+
+public:
+    Location() {}
+
+    Location(int x, int y) : x_(x), y_(y) {}
+
+    int get_x() const { return x_; }
+
+    int get_y() const { return y_; }
+};
+
 class Task {
 private:
     int no_;
-    int x_;
-    int y_;
+    Location xy_;
     int demand_;
     int readyTime_;
     int dueTime_;
@@ -30,14 +43,12 @@ public:
 
     Task(int no) : no_(no) {}
 
-    Task(int no, int x, int y, int demand, int readyTime, int dueTime, int serviceTime)
-    : no_(no), x_(x), y_(y), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
+    Task(int no, Location xy, int demand, int readyTime, int dueTime, int serviceTime)
+    : no_(no), xy_(xy), demand_(demand), readyTime_(readyTime), dueTime_(dueTime), serviceTime_(serviceTime) {}
 
     int get_no() const { return no_; }
 
-    int get_x() const { return x_; }
-
-    int get_y() const { return y_; }
+    Location get_xy() const { return xy_; }
 
     int get_demand() const { return demand_; }
 
@@ -47,7 +58,9 @@ public:
 
     int get_serviceTime() const { return serviceTime_; }
 
-    void demand_clear() { demand_ = 0; }
+    void set_no(int no) { no_ = no; }
+
+    void set_readyTime(int readyTime) { readyTime_ = readyTime; }
 };
 
 struct TaskCmp : public std::binary_function<Task, Task, bool> {
@@ -64,20 +77,6 @@ struct TaskCmp : public std::binary_function<Task, Task, bool> {
     }
 };
 
-class Location {
-private:
-    int x_, y_;
-
-public:
-    Location() {}
-
-    Location(int x, int y) : x_(x), y_(y) {}
-
-    int get_x() const { return x_; }
-
-    int get_y() const { return y_; }
-};
-
 /* for various kinds extraction */
 void __extract_func(char msg[], std::stack<int> &args);
 
@@ -87,7 +86,7 @@ void _extract_depot_rpc(char msg[], Location &depot);
 /* @task: no, x, y, demand, readyTime, dueTime, serviceTime */
 void _extract_taskInfo_from_csv(char msg[], std::stack<int> &args);
 
-/* @request rpc: no, x, y, demand, readyTime, dueTime, serviceTime, vehcCap */
+/* @request rpc: no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap, kilms */
 void _extract_request_rpc(char msg[], std::stack<int> &args);
 
 /* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
@@ -99,13 +98,10 @@ void _task_assignment_copy_from_args(std::stack<int> &args, Task &t);
 /* @depot rpc: x, y */
 void _generate_depot_rpc(char msg[], const Location &depot);
 
-/* @request rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap */
-void _generate_request_rpc(char msg[], const Task &t, const int vehcCap);
+/* @request rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap, kilms */
+void _generate_request_rpc(char msg[], const Task &t, const int vehcCap, const int kilms);
 
 /* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
 void _generate_reply_rpc(char msg[], const Task &t);
-
-/* prepare data */
-void scan_from_csv(std::multiset<Task, TaskCmp> &taskQ, Location &depot);
 
 #endif //VRP_RPC_H
