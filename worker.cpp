@@ -47,11 +47,11 @@ void get_depot(const int sock, char buf[], Location &depot)
 }
 
 /* ask task */
-void request_master(const int sock, const Task &t, const int restCap, const int kilms)
+void request_master(const int sock, const Task &t, const int restCap)
 {
     char buf[BUF_SIZE];
 
-    _generate_request_rpc(buf, t, restCap, kilms);
+    _generate_request_rpc(buf, t, restCap);
     write(sock, buf, sizeof(buf));
 }
 
@@ -113,7 +113,6 @@ int main(int argc, char const *argv[])
 
     char buf[BUF_SIZE];
     Location depot, preLoc;
-    int kilms = 0;
 
     get_depot(masterSock, buf, depot);
     preLoc = depot;
@@ -127,7 +126,7 @@ int main(int argc, char const *argv[])
         t.set_no(VehicleType);  /* tell master about the worker's type */
         printf("ask<-no:%d, x:%d, y:%d, demand:%d, readyTime:%d, dueTime:%d, serviceTime:%d\n",
                t.get_no(), t.get_xy().get_x(), t.get_xy().get_y(), t.get_demand(), t.get_readyTime(), t.get_dueTime(), t.get_serviceTime());
-        request_master(masterSock, t, restCap, kilms);
+        request_master(masterSock, t, restCap);
         get_task(masterSock, t);
         printf("get->no:%d, x:%d, y:%d, demand:%d, readyTime:%d, dueTime:%d, serviceTime:%d\n",
                t.get_no(), t.get_xy().get_x(), t.get_xy().get_y(), t.get_demand(), t.get_readyTime(), t.get_dueTime(), t.get_serviceTime());
@@ -137,7 +136,6 @@ int main(int argc, char const *argv[])
             printf("go to (%d,%d) doing the task %d\n", xy.get_x(), xy.get_y(), t.get_no());
             this_thread::sleep_for(chrono::milliseconds(t.get_serviceTime()));
 
-            kilms += abs(preLoc.get_x()-xy.get_x()) + abs(preLoc.get_y()-xy.get_y());
             restCap -= t.get_demand();
             preLoc = Location(xy.get_x(), xy.get_y());
             printf("task %d done\n", t.get_no());

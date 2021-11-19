@@ -39,7 +39,7 @@ void _extract_taskInfo_from_csv(char msg[], std::stack<int> &args)
     __extract_func(msg, args);
 }
 
-/* @request rpc: no, xy, demand, readyTime, dueTime, serviceTime; vehcCap, kilms */
+/* @request rpc: no, xy, demand, readyTime, dueTime, serviceTime; vehcCap */
 void _extract_request_rpc(char msg[], std::stack<int> &args)
 {
     __extract_func(msg, args);
@@ -67,11 +67,11 @@ void _generate_depot_rpc(char msg[], const Location &depot)
     sprintf(msg, "%d,%d", x, y);
 }
 
-/* @request rpc: task's no, xy, demand, readyTime, dueTime, serviceTime; vehcCap, kilms */
-void _generate_request_rpc(char msg[], const Task &t, const int vehcCap, const int kilms)
+/* @request rpc: task's no, xy, demand, readyTime, dueTime, serviceTime; vehcCap */
+void _generate_request_rpc(char msg[], const Task &t, const int vehcCap)
 {
     Location xy = t.get_xy();
-    sprintf(msg, "%d,%d,%d,%d,%d,%d,%d,%d,%d", t.get_no(), xy.get_x(), xy.get_y(), t.get_demand(), t.get_readyTime(), t.get_dueTime(), t.get_serviceTime(), vehcCap, kilms);
+    sprintf(msg, "%d,%d,%d,%d,%d,%d,%d,%d", t.get_no(), xy.get_x(), xy.get_y(), t.get_demand(), t.get_readyTime(), t.get_dueTime(), t.get_serviceTime(), vehcCap);
 }
 
 /* @reply rpc: task's no, xy, demand, readyTime, dueTime, serviceTime */

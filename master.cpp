@@ -26,7 +26,7 @@ static std::chrono::steady_clock::time_point StartTime;
 
 /* TaskQueue and mutex */
 static std::mutex Mtx;
-static std::multiset<Task, TaskCmp> TaskQ;
+static std::vector<Task> TaskQ;
 
 /* thread sync */
 static std::mutex CvMtx;
@@ -47,7 +47,7 @@ const float DotsCostVct[] = {0, 15, 11.5, 8.5};
 
 class Method {
 public:
-    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap, const int kilms) {
+    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap) {
         auto maxReadyTimeIte = TaskQ.begin();
         /* locate the maximum readyTime of task, unreachable! */
         while(true) {
@@ -64,8 +64,7 @@ public:
             if(ite->get_readyTime()<=timeStamp && ite->get_dueTime()>=timeStamp && ite->get_demand()<=vehcCap) {
                 Location xy1 = t.get_xy();
                 Location xy2 = ite->get_xy();
-                int dist = abs(xy1.get_x()-xy2.get_x()) + abs(xy1.get_y()-xy2.get_y());
-                int g = kilms + dist;   /* passed value */
+                int g = abs(xy1.get_x()-xy2.get_x()) + abs(xy1.get_y()-xy2.get_y());        /* try value */
                 int h = abs(xy2.get_x()-Depot.get_x()) + abs(xy2.get_y()-Depot.get_y());    /* hope value */
                 int f = g + h;          /* total value */
                 if(f <= bestDist) { bestDist = f; bestIte = ite; }
@@ -76,7 +75,7 @@ public:
         int dDemand = secondIte->get_demand()-bestIte->get_demand();
         if(dDemand > MinDemand) {
             int dCost = (secondDist-bestDist) * KilmsCostVct[t.get_no()];
-            if(dCost > DotsCostVct[t.get_no()]*(dDemand/MinDemand)) {   /* choose the second */
+            if(dCost > DotsCostVct[t.get_no()]) {   /* choose the second */
                 t = *secondIte;
                 TaskQ.erase(secondIte);
                 return;
@@ -115,14 +114,13 @@ void tell_worker_depot(const int sock, const Location &depot)
 }
 
 /* respond to the worker's request */
-void respond_worker(const int sock, char buf[], Task &t, int &vehcCap, int &kilms)
+void respond_worker(const int sock, char buf[], Task &t, int &vehcCap)
 {
     std::stack<int> args;
 
     _extract_request_rpc(buf, args);
     _task_assignment_copy_from_args(args, t);
     vehcCap = args.top(); args.pop();
-    kilms = args.top(); args.pop();
 }
 
 /* reply the worker */
@@ -138,7 +136,7 @@ void worker_handle(int sock)
 {
     char buf[BUF_SIZE];
     Task t;
-    int vehcCap, kilms;
+    int vehcCap;
 
     tell_worker_depot(sock, Depot);
     /* wait util timer start */
@@ -152,7 +150,7 @@ void worker_handle(int sock)
         if(read(sock, buf, BUF_SIZE) == 0) {
             break;
         }
-        respond_worker(sock, buf, t, vehcCap, kilms);
+        respond_worker(sock, buf, t, vehcCap);
 
         Mtx.lock();
         if(!TaskQ.empty()) {
@@ -161,7 +159,7 @@ void worker_handle(int sock)
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
             }
-            method.run(sock, t, timeStamp, vehcCap, kilms);
+            method.run(sock, t, timeStamp, vehcCap);
             printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.get_no(), t.get_readyTime(), t.get_dueTime(), sock, timeStamp);
             if(timeStamp>=t.get_readyTime() && timeStamp<=t.get_dueTime()) { printf("right time\n"); }
             else { printf("wrong time\n"); }
@@ -180,7 +178,7 @@ void worker_handle(int sock)
 }
 
 /* prepare data and preprocess */
-void scan_from_csv(std::multiset<Task, TaskCmp> &taskQ, Location &depot)
+void scan_from_csv()
 {
     /* data set */
     FILE *fp;
@@ -197,7 +195,7 @@ void scan_from_csv(std::multiset<Task, TaskCmp> &taskQ, Location &depot)
         args.pop();
         int x = args.top(); args.pop();
         int y = args.top(); args.pop();
-        depot = Location(x, y);
+        Depot = Location(x, y);
         /* clear the args */
         while(!args.empty()) { args.pop(); }
         /* scan the cluster */
@@ -207,15 +205,15 @@ void scan_from_csv(std::multiset<Task, TaskCmp> &taskQ, Location &depot)
             _task_assignment_copy_from_args(args, t);
             /* fix readyTime */
             int delayTime = t.get_dueTime() - t.get_serviceTime();
-//            printf("no:%d, dueTime:%d, serviceTime:%d, delayTime:%d\n", t.get_no(), t.get_dueTime(), t.get_serviceTime(), delayTime);
             if(delayTime >= t.get_readyTime()) {
                 t.set_readyTime(delayTime);
             }
-            taskQ.insert(t);
+            TaskQ.push_back(t);
         }
     }
-
     fclose(fp);
+    /* sort taksQ via readyTime */
+    std::sort(TaskQ.begin(), TaskQ.end(), TaskCmp());
 }
 
 int main(int argc, char const *argv[])
@@ -256,7 +254,7 @@ int main(int argc, char const *argv[])
     AddrSize workerAddrSize;
 
     /* pre-process */
-    scan_from_csv(TaskQ, Depot);
+    scan_from_csv();
 
     /* set the WorkerNumLimt */
     WorkerNumLimt = atoi(argv[2]);
