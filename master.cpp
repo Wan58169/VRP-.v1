@@ -3,14 +3,15 @@
 //
 #include "rpc.h"
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
 #include <thread>
 #include <vector>
-#include <queue>
-#include <vector>
+#include <bitset>
+#include <tuple>
 #include <condition_variable>
 #include <atomic>
 #include <mutex>
@@ -160,7 +161,8 @@ void worker_handle(int sock)
                 timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
             }
             method.run(sock, t, timeStamp, vehcCap);
-            printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ", t.get_no(), t.get_readyTime(), t.get_dueTime(), sock, timeStamp);
+            printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ",
+                   t.get_no(), t.get_readyTime(), t.get_dueTime(), sock, timeStamp);
             if(timeStamp>=t.get_readyTime() && timeStamp<=t.get_dueTime()) { printf("right time\n"); }
             else { printf("wrong time\n"); }
         }
@@ -177,16 +179,19 @@ void worker_handle(int sock)
     close(sock);
 }
 
-/* prepare data and preprocess */
-void scan_from_csv()
+/* prepare data */
+void scan_from_csv(const char fileName[])
 {
     /* data set */
     FILE *fp;
     char buf[BUF_SIZE];
+    std::string path = "dataset/";
     std::stack<int> args;      /* @args: no, xy, demand, readyTime, dueTime, serviceTime */
     Task t;
 
-    if( (fp=fopen("data.csv", "r")) ) {
+    path += fileName;   // generate the path of .csv
+
+    if( (fp=fopen(path.c_str(), "r")) ) {
         fseek(fp, 66L, SEEK_SET);   /* locate the second line */
         /* get the location of depot */
         fgets(buf, BUF_SIZE, fp);
@@ -200,20 +205,68 @@ void scan_from_csv()
         while(!args.empty()) { args.pop(); }
         /* scan the cluster */
         while( fgets(buf, BUF_SIZE, fp) ) {
-            buf[strlen(buf)-1] = '\0';  /* replace the end of str: '\n'->'\0' */
             _extract_taskInfo_from_csv(buf, args);
             _task_assignment_copy_from_args(args, t);
-            /* fix readyTime */
+            /* pre fix readyTime */
+            t.set_needFix(false);
             int delayTime = t.get_dueTime() - t.get_serviceTime();
-            if(delayTime >= t.get_readyTime()) {
-                t.set_readyTime(delayTime);
+            if(delayTime > t.get_readyTime()) {
+                t.set_needFix(true);
             }
+
             TaskQ.push_back(t);
         }
     }
     fclose(fp);
-    /* sort taksQ via readyTime */
+    /* sort taksQ based readyTime */
     std::sort(TaskQ.begin(), TaskQ.end(), TaskCmp());
+}
+
+void fix_readyTime()
+{
+    std::bitset<1200> map;
+    std::vector<Task> fixeds, needFixs;
+
+    srand(time(NULL));  // true random
+
+    /* fixeds & needFixs ctor, map counter */
+    for(int i=0; i<TaskQ.size(); i++) {
+        if(!TaskQ[i].get_needFix()) {
+            map[TaskQ[i].get_readyTime()] = 1;
+            fixeds.push_back(TaskQ[i]);
+        } else {
+            needFixs.push_back(TaskQ[i]);
+        }
+    }
+
+    /* insert the need fix task into fixeds */
+    for(auto &v : needFixs) {
+        while(true) {
+            int delayTime = v.get_dueTime() - v.get_serviceTime();
+            int readyTime = v.get_readyTime();
+            /* set the need fix task's readyTime */
+            int time = rand() % (delayTime-readyTime+1) + readyTime;     // readyTime <= time <= delayTime
+            if(map[time] == 0) {
+                v.set_readyTime(time);
+                v.set_needFix(false);
+                fixeds.push_back(v);
+                map[time] = 1;
+                break;
+            }
+        }
+    }
+
+    TaskQ.clear();
+    TaskQ.assign(fixeds.begin(), fixeds.end());
+    /* sort taksQ based readyTime */
+    std::sort(TaskQ.begin(), TaskQ.end(), TaskCmp());
+}
+
+void print_TaskQ()
+{
+    for(auto &v : TaskQ) {
+        printf("no: %d, readyTime: %d, dueTime: %d, needFix: %d\n", v.get_no(), v.get_readyTime(), v.get_dueTime(), v.get_needFix());
+    }
 }
 
 int main(int argc, char const *argv[])
@@ -223,8 +276,8 @@ int main(int argc, char const *argv[])
     AddrSize masterAddrSize = sizeof(masterAddr);
 
     /* unvalid input */
-    if(argc != 3) {
-        printf("Usage: %s <port> <workers>\n", argv[0]);
+    if(argc != 4) {
+        printf("Usage: %s <port> <workers> <fileName>\n", argv[0]);
         exit(1);
     }
 
@@ -253,8 +306,11 @@ int main(int argc, char const *argv[])
     Addr workerAddr;
     AddrSize workerAddrSize;
 
-    /* pre-process */
-    scan_from_csv();
+    scan_from_csv(argv[3]);
+
+    fix_readyTime();
+
+//    print_TaskQ();
 
     /* set the WorkerNumLimt */
     WorkerNumLimt = atoi(argv[2]);

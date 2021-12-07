@@ -37,6 +37,7 @@ private:
     int readyTime_;
     int dueTime_;
     int serviceTime_;
+    bool needFix_;
 
 public:
     Task() {}
@@ -58,9 +59,13 @@ public:
 
     int get_serviceTime() const { return serviceTime_; }
 
+    bool get_needFix() const { return needFix_; }
+
     void set_no(int no) { no_ = no; }
 
     void set_readyTime(int readyTime) { readyTime_ = readyTime; }
+
+    void set_needFix(bool needFix) { needFix_ = needFix; }
 };
 
 struct TaskCmp : public std::binary_function<Task, Task, bool> {

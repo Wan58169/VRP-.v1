@@ -13,30 +13,18 @@ typedef socklen_t AddrSize;
 
 using namespace std;
 
-int VehicleType;
-
-int get_vehicle_capacity(char vehicleType)
+int get_vehicle_capacity(char vehcType)
 {
-    int ret;
-
-    switch(vehicleType) {
+    switch(vehcType) {
         case 'A':
-            VehicleType = 1;
-            ret = 90;
-            break;
+            return 90;
         case 'B':
-            VehicleType = 2;
-            ret = 150;
-            break;
+            return 150;
         case 'C':
-            VehicleType = 3;
-            ret = 240;
-            break;
+            return 240;
         default:
-            ret = -1;
-            break;
+            return -1;
     }
-    return ret;
 }
 
 /* extract the location of depot */
@@ -119,17 +107,14 @@ int main(int argc, char const *argv[])
     printf("srcLoc..(%d,%d)\n", preLoc.get_x(), preLoc.get_y());
     Task t(-1, depot, 0, 0, 0, 0);
 
-    int vehcCap = get_vehicle_capacity(argv[3][0]);
+    char vehcType = argv[3][0];
+    int vehcCap = get_vehicle_capacity(vehcType);
     int restCap = vehcCap;
+    printf("vehcType..%c\n", vehcType);
 
     while(true) {
-        t.set_no(VehicleType);  /* tell master about the worker's type */
-        printf("ask<-no:%d, x:%d, y:%d, demand:%d, readyTime:%d, dueTime:%d, serviceTime:%d\n",
-               t.get_no(), t.get_xy().get_x(), t.get_xy().get_y(), t.get_demand(), t.get_readyTime(), t.get_dueTime(), t.get_serviceTime());
         request_master(masterSock, t, restCap);
         get_task(masterSock, t);
-        printf("get->no:%d, x:%d, y:%d, demand:%d, readyTime:%d, dueTime:%d, serviceTime:%d\n",
-               t.get_no(), t.get_xy().get_x(), t.get_xy().get_y(), t.get_demand(), t.get_readyTime(), t.get_dueTime(), t.get_serviceTime());
 
         if(t.get_no() > 0) {     /* regular task */
             Location xy = t.get_xy();

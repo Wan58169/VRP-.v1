@@ -1,0 +1,137 @@
+new worker 4 connected
+new worker 5 connected
+new worker 6 connected
+new worker 7 connected
+new worker 8 connected
+new worker 9 connected
+new worker 10 connected
+new worker 11 connected
+new worker 12 connected
+new worker 13 connected
+new worker 14 connected
+new worker 15 connected
+notify all
+task 6 readyTime 20 dueTime 120 dispatch worker 4 timeStamp 20 right time
+task 44 readyTime 31 dueTime 144 dispatch worker 5 timeStamp 31 right time
+task 68 readyTime 33 dueTime 143 dispatch worker 6 timeStamp 34 right time
+task 43 readyTime 37 dueTime 190 dispatch worker 7 timeStamp 37 right time
+task 58 readyTime 42 dueTime 140 dispatch worker 8 timeStamp 42 right time
+task 99 readyTime 44 dueTime 139 dispatch worker 9 timeStamp 44 right time
+task 21 readyTime 47 dueTime 137 dispatch worker 10 timeStamp 47 right time
+task 91 readyTime 55 dueTime 148 dispatch worker 11 timeStamp 55 right time
+task 66 readyTime 59 dueTime 155 dispatch worker 12 timeStamp 59 right time
+task 14 readyTime 60 dueTime 155 dispatch worker 13 timeStamp 60 right time
+task 56 readyTime 66 dueTime 190 dispatch worker 14 timeStamp 67 right time
+task 33 readyTime 71 dueTime 170 dispatch worker 15 timeStamp 71 right time
+task 4 readyTime 84 dueTime 186 dispatch worker 4 timeStamp 115 right time
+task 25 readyTime 86 dueTime 184 dispatch worker 5 timeStamp 126 right time
+task 88 readyTime 76 dueTime 173 dispatch worker 6 timeStamp 128 right time
+task 34 readyTime 82 dueTime 193 dispatch worker 7 timeStamp 128 right time
+task 82 readyTime 83 dueTime 201 dispatch worker 8 timeStamp 133 right time
+task 97 readyTime 78 dueTime 187 dispatch worker 9 timeStamp 137 right time
+task 18 readyTime 81 dueTime 172 dispatch worker 10 timeStamp 138 right time
+task 87 readyTime 146 dueTime 270 dispatch worker 11 timeStamp 151 right time
+task 64 readyTime 150 dueTime 242 dispatch worker 12 timeStamp 151 right time
+task 26 readyTime 147 dueTime 251 dispatch worker 13 timeStamp 152 right time
+task 42 readyTime 151 dueTime 269 dispatch worker 14 timeStamp 160 right time
+task 8 readyTime 163 dueTime 253 dispatch worker 15 timeStamp 164 right time
+task 19 readyTime 186 dueTime 291 dispatch worker 4 timeStamp 209 right time
+task 32 readyTime 181 dueTime 256 dispatch worker 5 timeStamp 217 right time
+task 96 readyTime 174 dueTime 261 dispatch worker 6 timeStamp 222 right time
+task 77 readyTime 185 dueTime 288 dispatch worker 7 timeStamp 222 right time
+task 79 readyTime 111 dueTime 201 dispatch worker 8 timeStamp 224 wrong time
+task 55 readyTime 161 dueTime 293 dispatch worker 9 timeStamp 229 right time
+task 28 readyTime 235 dueTime 343 dispatch worker 10 timeStamp 235 right time
+task 63 readyTime 238 dueTime 344 dispatch worker 11 timeStamp 241 right time
+task 41 readyTime 236 dueTime 349 dispatch worker 12 timeStamp 242 right time
+task 95 readyTime 261 dueTime 361 dispatch worker 13 timeStamp 261 right time
+task 9 readyTime 263 dueTime 359 dispatch worker 14 timeStamp 263 right time
+task 36 readyTime 272 dueTime 375 dispatch worker 15 timeStamp 272 right time
+task 20 readyTime 275 dueTime 379 dispatch worker 4 timeStamp 300 right time
+task 54 readyTime 285 dueTime 378 dispatch worker 5 timeStamp 312 right time
+task 72 readyTime 289 dueTime 393 dispatch worker 7 timeStamp 317 right time
+task 84 readyTime 277 dueTime 375 dispatch worker 6 timeStamp 317 right time
+task 45 readyTime 332 dueTime 439 dispatch worker 9 timeStamp 333 right time
+task 11 readyTime 335 dueTime 436 dispatch worker 10 timeStamp 335 right time
+task 30 readyTime 338 dueTime 428 dispatch worker 11 timeStamp 338 right time
+task 83 readyTime 348 dueTime 445 dispatch worker 12 timeStamp 348 right time
+task 75 readyTime 349 dueTime 442 dispatch worker 13 timeStamp 352 right time
+task 71 readyTime 358 dueTime 490 dispatch worker 14 timeStamp 358 right time
+task 38 readyTime 366 dueTime 460 dispatch worker 15 timeStamp 367 right time
+task 16 readyTime 362 dueTime 451 dispatch worker 4 timeStamp 392 right time
+task 57 readyTime 367 dueTime 462 dispatch worker 5 timeStamp 402 right time
+task 93 readyTime 363 dueTime 478 dispatch worker 8 timeStamp 410 right time
+task 85 readyTime 425 dueTime 556 dispatch worker 6 timeStamp 426 right time
+task 31 readyTime 430 dueTime 531 dispatch worker 9 timeStamp 431 right time
+task 12 readyTime 431 dueTime 533 dispatch worker 10 timeStamp 431 right time
+task 73 readyTime 436 dueTime 533 dispatch worker 11 timeStamp 436 right time
+task 74 readyTime 446 dueTime 587 dispatch worker 12 timeStamp 446 right time
+task 47 readyTime 449 dueTime 540 dispatch worker 13 timeStamp 449 right time
+task 94 readyTime 453 dueTime 540 dispatch worker 14 timeStamp 453 right time
+task 39 readyTime 457 dueTime 544 dispatch worker 15 timeStamp 460 right time
+task 62 readyTime 495 dueTime 650 dispatch worker 7 timeStamp 505 right time
+task 17 readyTime 450 dueTime 555 dispatch worker 8 timeStamp 505 right time
+task 59 readyTime 462 dueTime 566 dispatch worker 9 timeStamp 521 right time
+task 29 readyTime 525 dueTime 616 dispatch worker 10 timeStamp 525 right time
+task 46 readyTime 529 dueTime 629 dispatch worker 11 timeStamp 529 right time
+task 86 readyTime 531 dueTime 640 dispatch worker 12 timeStamp 537 right time
+task 10 readyTime 532 dueTime 640 dispatch worker 13 timeStamp 540 right time
+task 98 readyTime 537 dueTime 652 dispatch worker 14 timeStamp 546 right time
+task 15 readyTime 551 dueTime 646 dispatch worker 15 timeStamp 553 right time
+task 40 readyTime 558 dueTime 653 dispatch worker 4 timeStamp 578 right time
+task 61 readyTime 533 dueTime 662 dispatch worker 5 timeStamp 587 right time
+task 78 readyTime 560 dueTime 678 dispatch worker 7 timeStamp 597 right time
+task 89 readyTime 615 dueTime 739 dispatch worker 8 timeStamp 615 right time
+task 65 readyTime 625 dueTime 724 dispatch worker 6 timeStamp 625 right time
+task 101 readyTime 626 dueTime 765 dispatch worker 9 timeStamp 626 right time
+task 13 readyTime 628 dueTime 756 dispatch worker 10 timeStamp 628 right time
+task 49 readyTime 633 dueTime 724 dispatch worker 11 timeStamp 633 right time
+task 37 readyTime 644 dueTime 742 dispatch worker 12 timeStamp 644 right time
+task 60 readyTime 645 dueTime 784 dispatch worker 13 timeStamp 645 right time
+task 7 readyTime 649 dueTime 743 dispatch worker 14 timeStamp 649 right time
+task 27 readyTime 650 dueTime 741 dispatch worker 15 timeStamp 650 right time
+task 80 readyTime 661 dueTime 763 dispatch worker 4 timeStamp 669 right time
+task 52 readyTime 709 dueTime 816 dispatch worker 5 timeStamp 709 right time
+task 24 readyTime 710 dueTime 800 dispatch worker 7 timeStamp 710 right time
+task 5 readyTime 714 dueTime 810 dispatch worker 9 timeStamp 717 right time
+task 69 readyTime 712 dueTime 799 dispatch worker 10 timeStamp 718 right time
+task 90 readyTime 739 dueTime 834 dispatch worker 6 timeStamp 739 right time
+task 81 readyTime 750 dueTime 845 dispatch worker 11 timeStamp 750 right time
+task 35 readyTime 755 dueTime 848 dispatch worker 13 timeStamp 755 right time
+task 100 readyTime 764 dueTime 858 dispatch worker 12 timeStamp 764 right time
+task 3 readyTime 802 dueTime 893 dispatch worker 14 timeStamp 803 right time
+task 67 readyTime 807 dueTime 899 dispatch worker 15 timeStamp 808 right time
+task 51 readyTime 816 dueTime 912 dispatch worker 4 timeStamp 816 right time
+task 92 readyTime 825 dueTime 916 dispatch worker 8 timeStamp 825 right time
+task 23 readyTime 827 dueTime 919 dispatch worker 5 timeStamp 827 right time
+task 22 readyTime 890 dueTime 991 dispatch worker 7 timeStamp 890 right time
+task 2 readyTime 896 dueTime 994 dispatch worker 10 timeStamp 896 right time
+task 70 readyTime 897 dueTime 996 dispatch worker 6 timeStamp 897 right time
+task 53 readyTime 899 dueTime 998 dispatch worker 11 timeStamp 899 right time
+task 50 readyTime 970 dueTime 1098 dispatch worker 13 timeStamp 970 right time
+task 76 readyTime 982 dueTime 1103 dispatch worker 14 timeStamp 982 right time
+task 48 readyTime 985 dueTime 1127 dispatch worker 15 timeStamp 986 right time
+no task to do, worker 9
+no task to do, worker 4
+no task to do, worker 8
+no task to do, worker 5
+no task to do, worker 12
+no task to do, worker 7
+worker 4 disconnect!
+worker 9 disconnect!
+worker 5 disconnect!
+worker 7 disconnect!
+worker 8 disconnect!
+worker 12 disconnect!
+no task to do, worker 10
+worker 10 disconnect!
+no task to do, worker 6
+worker 6 disconnect!
+no task to do, worker 11
+worker 11 disconnect!
+no task to do, worker 13
+worker 13 disconnect!
+no task to do, worker 14
+worker 14 disconnect!
+no task to do, worker 15
+worker 15 disconnect!
