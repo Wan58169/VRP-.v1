@@ -1,18 +1,11 @@
-# VRP
-read algorithm.xmind
-![alt 图片](https://github.com/Wan58169/VRP/blob/master/algorithm.png)
+# Build
 
-This program needs one master, twelve workers.
+```shell
+$g++ test.cpp -std=c++11 -o test
+```
 
-compile master.cpp: `g++ master.cpp rpc.cpp -std=c++11 -o master`
+# Run
 
-run master: `./master 9022 12`
-  
-compile worker.cpp: `g++ worker.cpp rpc.cpp -std=c++11 -o worker`
-
-run workerX: `./worker 127.0.0.1 9022 A`
-
-
-  
-
-
+```shell
+$./test fileName workerNum
+```

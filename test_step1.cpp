@@ -1,6 +1,7 @@
 //
 // Created by WAN on 2021/12/3.
 //
+#include "common.h"
 #include "rpc.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,24 +11,15 @@
 
 using namespace std;
 
-/* model st. cost */
-const float KilmsCostVct[] = {0, 1.6, 1.75, 1.85};
-const float DotsCostVct[] = {0, 25, 20, 15};
-
 int generate_solutions(const string file, const int workerNum)
 {
     string master = "./master";
     string worker = "./worker";
     string ip = "127.0.0.1";
     int port = 9033;
-    string outPath = "> result/tmp/";
-    string cmdRest = ".txt &";
+    string cmdRest = " &";
     int workerNo = 1;
     int solutionNo = 0;
-
-    /* compile master.cpp and worker.cpp */
-    system("g++ master.cpp rpc.cpp -o master -std=c++11 -lpthread");
-    system("g++ worker.cpp rpc.cpp -o worker -std=c++11");
 
     /* drop all result first */
     system("cd result/tmp/ && rm -rf *");
@@ -42,32 +34,32 @@ int generate_solutions(const string file, const int workerNum)
             string cmd = "cd result/tmp/ && mkdir " + to_string(solutionNo);
             system(cmd.c_str());    // mkdir for solution
 
-            /* ./master 9033 14 .csv > result/tmp/solutionNo/master.txt & */
-            cmd = master + " " + to_string(port) + " " + to_string(workerNum) + " " + file + " " +
-                    outPath + to_string(solutionNo) + "/master" + cmdRest;
+            /* ./master 9033 14 .csv solutionNo & */
+            cmd = master + " " + to_string(port) + " " + to_string(workerNum) + " " + file + " "
+                    + to_string(solutionNo) + cmdRest;
             system(cmd.c_str());
 
             /* start worker A */
             for(int i=0; i<a; i++) {
-                /* ./worker 127.0.0.1 9033 A > result/tmp/solutionNo/workerx.txt & */
-                cmd = worker + " " + ip + " " + to_string(port) + " A " +
-                        outPath + to_string(solutionNo) + "/worker" + to_string(workerNo) + cmdRest;
+                /* ./worker 127.0.0.1 9033 A workerNo solutionNo & */
+                cmd = worker + " " + ip + " " + to_string(port) + " A "
+                        + to_string(workerNo) + " " + to_string(solutionNo) + cmdRest;
                 system(cmd.c_str());
                 workerNo++;
             }
             /* start worker B */
             for(int i=0; i<b; i++) {
-                /* ./worker 127.0.0.1 9033 B > result/tmp/solutionNo/workerx.txt & */
-                cmd = worker + " " + ip + " " + to_string(port) + " B " +
-                        outPath + to_string(solutionNo) + "/worker" + to_string(workerNo) + cmdRest;
+                /* ./worker 127.0.0.1 9033 B workerNo solutionNo & */
+                cmd = worker + " " + ip + " " + to_string(port) + " B "
+                        + to_string(workerNo) + " " + to_string(solutionNo) + cmdRest;
                 system(cmd.c_str());
                 workerNo++;
             }
             /* start worker C */
             for(int i=0; i<c; i++) {
-                /* ./worker 127.0.0.1 9033 C > result/tmp/solutionNo/workerx.txt & */
-                cmd = worker + " " + ip + " " + to_string(port) + " C " +
-                        outPath + to_string(solutionNo) + "/worker" + to_string(workerNo) + cmdRest;
+                /* ./worker 127.0.0.1 9033 C workerNo solutionNo & */
+                cmd = worker + " " + ip + " " + to_string(port) + " C "
+                        + to_string(workerNo) + " " + to_string(solutionNo) + cmdRest;
                 system(cmd.c_str());
                 workerNo++;
             }
@@ -75,7 +67,10 @@ int generate_solutions(const string file, const int workerNum)
             workerNo = 1;
             port++;
 
-//            printf("solutions[%d]: a..%d, b..%d, c..%d\n", solutionNo, a, b, c);
+            printf("solutions[%d] is done\n", solutionNo);
+
+            this_thread::sleep_for(chrono::milliseconds(100));
+
             system("cd ../..");
         }
     }
@@ -86,7 +81,7 @@ int generate_solutions(const string file, const int workerNum)
 int main(int argc, char const *argv[])
 {
     if(argc != 3) {
-        printf("Usage: %s <fileName> <workers>\n", argv[0]);
+        printf("Usage: %s <fileName> <workerNum>\n", argv[0]);
         exit(1);
     }
 
@@ -95,7 +90,12 @@ int main(int argc, char const *argv[])
 
     int solutionNum = generate_solutions(file, workerNum);
 
-    printf("%d %d", workerNum, solutionNum);
+    char buf[16];
+    sprintf(buf, "%d %d\n", workerNum, solutionNum);
+    printf("%s", buf);
+
+    FILE *fp = fopen("result/total.txt", "w");
+    fputs(buf, fp);
 
     return 0;
 }

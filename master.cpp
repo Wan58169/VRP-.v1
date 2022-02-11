@@ -1,6 +1,7 @@
 //
 // Created by WAN on 2021/9/19.
 //
+#include "common.h"
 #include "rpc.h"
 #include <stdlib.h>
 #include <time.h>
@@ -11,7 +12,6 @@
 #include <thread>
 #include <vector>
 #include <bitset>
-#include <tuple>
 #include <condition_variable>
 #include <atomic>
 #include <mutex>
@@ -39,28 +39,19 @@ static std::atomic<int> WeakUpNum(0);
 static std::atomic<int> WorkerNum(0);
 static std::atomic<int> WorkerNumLimt(0);
 
-/* min demand */
-const int MinDemand = 10;
-
-/* model st. cost */
-const float KilmsCostVct[] = {0, 0.85, 1.15, 1.50};
-const float DotsCostVct[] = {0, 15, 11.5, 8.5};
+/* counter */
+int RightCnt = 0;
+int WorkersType[] = {0, 0, 0};
 
 class Method {
 public:
-    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap) {
-        auto maxReadyTimeIte = TaskQ.begin();
-        /* locate the maximum readyTime of task, unreachable! */
-        while(true) {
-            if(maxReadyTimeIte->get_readyTime()>timeStamp || maxReadyTimeIte==TaskQ.end()) { break; }
-            else { maxReadyTimeIte++; }
-        }
+    void run(const int sock, Task &t, const long long timeStamp, const int vehcCap, const int restCap, int &taskType) {
         /* find the best task and this worker can handle */
-        auto bestIte = TaskQ.begin();
-        auto secondIte = TaskQ.begin();
+        auto bestIte = TaskQ.end();
+        auto secondIte = TaskQ.end();
         int bestDist = INT32_MAX;
         int secondDist = INT32_MAX;
-        for(auto ite=TaskQ.begin(); ite!=maxReadyTimeIte; ite++) {
+        for(auto ite=TaskQ.begin(); ite!=TaskQ.end(); ite++) {
             /* available task */
             if(ite->get_readyTime()<=timeStamp && ite->get_dueTime()>=timeStamp && ite->get_demand()<=vehcCap) {
                 Location xy1 = t.get_xy();
@@ -73,17 +64,26 @@ public:
             }
         }
         /* compare best and second */
-        int dDemand = secondIte->get_demand()-bestIte->get_demand();
-        if(dDemand > MinDemand) {
-            int dCost = (secondDist-bestDist) * KilmsCostVct[t.get_no()];
-            if(dCost > DotsCostVct[t.get_no()]) {   /* choose the second */
-                t = *secondIte;
-                TaskQ.erase(secondIte);
-                return;
+        if(bestDist == secondDist) {
+            if(bestIte->get_demand() < secondIte->get_demand()) {   /* choose the second */
+                bestIte = secondIte;
             }
         }
-        t = *bestIte;
-        TaskQ.erase(bestIte);
+
+        if(bestIte != TaskQ.end()) {
+            t = *bestIte;
+            TaskQ.erase(bestIte);
+            Dprint("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %d\n",
+                   t.get_no(), t.get_readyTime(), t.get_dueTime(), sock, static_cast<int>(timeStamp));
+            RightCnt++;
+            if(bestIte->get_demand() > restCap) {
+                taskType = TaskNonHandle;
+            } else {
+                taskType = 2;
+            }
+        } else {
+            taskType = TaskWait;
+        }
     }
 };
 
@@ -102,7 +102,7 @@ void timer_run()
     }
     while(WeakUpNum != WorkerNumLimt)
         ;
-    printf("notify all\n");
+    Dprint("notify all\n");
 }
 
 /* tell worker about depot */
@@ -114,22 +114,31 @@ void tell_worker_depot(const int sock, const Location &depot)
     write(sock, buf, sizeof(buf));
 }
 
+void get_worker_vehcType(const int sock, char &type)
+{
+    char buf[8];
+
+    read(sock, buf, sizeof(buf));
+    type = buf[0];
+}
+
 /* respond to the worker's request */
-void respond_worker(const int sock, char buf[], Task &t, int &vehcCap)
+void respond_worker(const int sock, char buf[], Task &t, int &vehcCap, int &restCap)
 {
     std::stack<int> args;
 
     _extract_request_rpc(buf, args);
     _task_assignment_copy_from_args(args, t);
     vehcCap = args.top(); args.pop();
+    restCap = args.top(); args.pop();
 }
 
 /* reply the worker */
-void reply_worker(const int sock, const Task &t)
+void reply_worker(const int sock, const Task &t, const int type)
 {
     char buf[BUF_SIZE];
 
-    _generate_reply_rpc(buf, t);
+    _generate_reply_rpc(buf, t, type);
     write(sock, buf, sizeof(buf));
 }
 
@@ -137,9 +146,25 @@ void worker_handle(int sock)
 {
     char buf[BUF_SIZE];
     Task t;
-    int vehcCap;
+    int vehcCap, restCap;
+    char vehcType;
+    int taskType;
 
     tell_worker_depot(sock, Depot);
+
+    get_worker_vehcType(sock, vehcType);
+
+    switch(vehcType) {
+        case 'A':
+            WorkersType[0]++;
+            break;
+        case 'B':
+            WorkersType[1]++;
+            break;
+        case 'C':
+            WorkersType[2]++;
+            break;
+    }
     /* wait util timer start */
     {
         std::unique_lock<std::mutex> lk(CvMtx);
@@ -151,30 +176,23 @@ void worker_handle(int sock)
         if(read(sock, buf, BUF_SIZE) == 0) {
             break;
         }
-        respond_worker(sock, buf, t, vehcCap);
+        respond_worker(sock, buf, t, vehcCap, restCap);
 
         Mtx.lock();
         if(!TaskQ.empty()) {
-            auto timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
-            while(timeStamp < TaskQ.begin()->get_readyTime()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-StartTime).count();
-            }
-            method.run(sock, t, timeStamp, vehcCap);
-            printf("task %d readyTime %d dueTime %d dispatch worker %d timeStamp %lld ",
-                   t.get_no(), t.get_readyTime(), t.get_dueTime(), sock, timeStamp);
-            if(timeStamp>=t.get_readyTime() && timeStamp<=t.get_dueTime()) { printf("right time\n"); }
-            else { printf("wrong time\n"); }
+            auto timeStamp = std::chrono::duration_cast<std::chrono::milliseconds>
+                    (std::chrono::steady_clock::now()-StartTime).count();
+            method.run(sock, t, timeStamp, vehcCap, restCap, taskType);
         }
         else {
-            t = Task(TaskEnd);
-            printf("no task to do, worker %d\n", sock);
+            taskType = TaskEnd;
+            Dprint("no task to do, worker %d\n", sock);
         }
         Mtx.unlock();
-        reply_worker(sock, t);
+        reply_worker(sock, t, taskType);
     }
 
-    printf("worker %d disconnect!\n", sock);
+    Dprint("worker %d disconnect!\n", sock);
     WorkerNum--;
     close(sock);
 }
@@ -186,10 +204,10 @@ void scan_from_csv(const char fileName[])
     FILE *fp;
     char buf[BUF_SIZE];
     std::string path = "dataset/";
-    std::stack<int> args;      /* @args: no, xy, demand, readyTime, dueTime, serviceTime */
+    std::stack<int> args;
     Task t;
 
-    path += fileName;   // generate the path of .csv
+    path += fileName;   /* generate the path of .csv */
 
     if( (fp=fopen(path.c_str(), "r")) ) {
         fseek(fp, 66L, SEEK_SET);   /* locate the second line */
@@ -224,10 +242,10 @@ void scan_from_csv(const char fileName[])
 
 void fix_readyTime()
 {
-    std::bitset<1200> map;
+    std::bitset<6000> map;
     std::vector<Task> fixeds, needFixs;
 
-    srand(time(NULL));  // true random
+    srand(time(NULL));  /* true random */
 
     /* fixeds & needFixs ctor, map counter */
     for(int i=0; i<TaskQ.size(); i++) {
@@ -265,7 +283,7 @@ void fix_readyTime()
 void print_TaskQ()
 {
     for(auto &v : TaskQ) {
-        printf("no: %d, readyTime: %d, dueTime: %d, needFix: %d\n", v.get_no(), v.get_readyTime(), v.get_dueTime(), v.get_needFix());
+        Dprint("no: %d, readyTime: %d, dueTime: %d, demand: %d\n", v.get_no(), v.get_readyTime(), v.get_dueTime(), v.get_demand());
     }
 }
 
@@ -276,14 +294,14 @@ int main(int argc, char const *argv[])
     AddrSize masterAddrSize = sizeof(masterAddr);
 
     /* unvalid input */
-    if(argc != 4) {
-        printf("Usage: %s <port> <workers> <fileName>\n", argv[0]);
+    if(argc != 5) {
+        Dprint("Usage: %s <port> <workerNum> <fileName> <solutionNo>\n", argv[0]);
         exit(1);
     }
 
     masterSock = socket(PF_INET, SOCK_STREAM, 0);
     if(masterSock == -1) {
-        printf("sock error\n");
+        Dprint("sock error\n");
         exit(1);
     }
 
@@ -293,12 +311,12 @@ int main(int argc, char const *argv[])
     masterAddr.sin_port = htons(atoi(argv[1]));
 
     if(bind(masterSock, (struct sockaddr*)&masterAddr, masterAddrSize) == -1) {
-        printf("bind error\n");
+        Dprint("bind error\n");
         exit(1);
     }
 
     if(listen(masterSock, BUF_SIZE) == -1) {
-        printf("listen error\n");
+        Dprint("listen error\n");
         exit(1);
     }
 
@@ -321,20 +339,44 @@ int main(int argc, char const *argv[])
         /* try to accept the request */
         workerSock = accept(masterSock, (struct sockaddr*)&workerAddr, &workerAddrSize);
         if(workerSock == -1) {
-            printf("accept error");
+            Dprint("accept error");
             exit(1);
         }
         ++WorkerNum;
-        printf("new worker %d connected\n", workerSock);
+        Dprint("new worker %d connected\n", workerSock);
         /* create thread for worker */
         threads.push_back(std::thread(worker_handle, workerSock));
     }
     /* run timer */
     threads.push_back(std::thread(timer_run));
 
-    for(auto &v : threads) { v.join(); }
+    for(auto &v : threads) { v.detach(); }
+
+    std::this_thread::sleep_for(std::chrono::seconds(4));
+
+    /* write logs into result/tmp/x/master.txt */
+    std::string file = "result/tmp/" + std::string(argv[4]) + "/master.txt";
+    FILE *fp = fopen(file.c_str(), "w");
+    char buf[32];
+
+    if(fp) {
+        Dprint("open %s\n", file.c_str());
+    }
+
+    if(RightCnt == 100) {
+        sprintf(buf, "this way is right\n");
+    } else {
+        sprintf(buf, "this way is wrong\n");
+    }
+    Dprint("%s", buf);
+    fputs(buf, fp);
+
+    sprintf(buf, "A:%d, B:%d, C:%d\n", WorkersType[0], WorkersType[1], WorkersType[2]);
+    Dprint("%s", buf);
+    fputs(buf, fp);
 
     close(masterSock);
+    fclose(fp);
 
     return 0;
 }

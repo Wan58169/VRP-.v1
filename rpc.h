@@ -7,13 +7,8 @@
 
 #include <iostream>
 #include <stack>
-#include <set>
 #include <stdio.h>
 #include <string.h>
-
-#define BUF_SIZE 256
-
-const int TaskEnd = -1;
 
 class Location {
 private:
@@ -91,7 +86,7 @@ void _extract_depot_rpc(char msg[], Location &depot);
 /* @task: no, x, y, demand, readyTime, dueTime, serviceTime */
 void _extract_taskInfo_from_csv(char msg[], std::stack<int> &args);
 
-/* @request rpc: no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap */
+/* @request rpc: no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap, restCap */
 void _extract_request_rpc(char msg[], std::stack<int> &args);
 
 /* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
@@ -103,10 +98,10 @@ void _task_assignment_copy_from_args(std::stack<int> &args, Task &t);
 /* @depot rpc: x, y */
 void _generate_depot_rpc(char msg[], const Location &depot);
 
-/* @request rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap */
-void _generate_request_rpc(char msg[], const Task &t, const int vehcCap);
+/* @request rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime; vehcCap, restCap */
+void _generate_request_rpc(char msg[], const Task &t, const int vehcCap, const int restCap);
 
-/* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime */
-void _generate_reply_rpc(char msg[], const Task &t);
+/* @reply rpc: task's no, x, y, demand, readyTime, dueTime, serviceTime; taskType */
+void _generate_reply_rpc(char msg[], const Task &t, const int type);
 
 #endif //VRP_RPC_H

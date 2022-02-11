@@ -1,31 +1,11 @@
-connected..
+A
 srcLoc..(40,50)
-vehcType..A
-go to (42,65) doing the task 6
-task 6 done
-----------------------
-go to (42,66) doing the task 4
-task 4 done
-----------------------
-go to (15,75) doing the task 19
-task 19 done
-----------------------
-go to (15,80) doing the task 20
-task 20 done
-----------------------
-go to (2,40) doing the task 38
-task 38 done
-----------------------
-go to (0,40) doing the task 39
-task 39 done
-----------------------
-go to (65,60) doing the task 89
-task 89 done
-----------------------
+go to (60,55) doing the task 91
+go to (88,35) doing the task 79
+back to depot (40,50)
+go to (35,30) doing the task 41
+go to (53,30) doing the task 73
+go to (35,5) doing the task 61
+back to depot (40,50)
 go to (28,55) doing the task 24
-task 24 done
-----------------------
-go to (30,52) doing the task 22
-task 22 done
-----------------------
 noting to do now, back to depot (40,50)

@@ -1,0 +1,2 @@
+this way is right
+A:2, B:3, C:5

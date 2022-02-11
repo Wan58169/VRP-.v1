@@ -1,0 +1,2 @@
+this way is wrong
+A:14, B:0, C:1

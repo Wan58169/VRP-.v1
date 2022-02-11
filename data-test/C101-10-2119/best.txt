@@ -1,0 +1,67 @@
+solutions[1] is right, A..0, B..0, C..10, cost..2189.039551
+solutions[2] is right, A..0, B..1, C..9, cost..2237.399902
+solutions[3] is right, A..0, B..2, C..8, cost..2248.739746
+solutions[4] is right, A..0, B..3, C..7, cost..2197.099854
+solutions[5] is right, A..0, B..4, C..6, cost..2259.639893
+solutions[6] is right, A..0, B..5, C..5, cost..2272.380859
+solutions[7] is right, A..0, B..6, C..4, cost..2155.699951
+solutions[8] is right, A..0, B..7, C..3, cost..2157.099609
+solutions[9] is right, A..0, B..8, C..2, cost..2168.920166
+solutions[10] is right, A..0, B..9, C..1, cost..2133.000244
+solutions[11] is right, A..0, B..10, C..0, cost..2227.999756
+solutions[12] is right, A..1, B..0, C..9, cost..2244.759033
+solutions[13] is right, A..1, B..1, C..8, cost..2220.323242
+solutions[14] is right, A..1, B..2, C..7, cost..2212.056396
+solutions[15] is wrong
+solutions[16] is right, A..1, B..4, C..5, cost..2194.008545
+solutions[17] is right, A..1, B..5, C..4, cost..2187.798828
+solutions[18] is right, A..1, B..6, C..3, cost..2175.666504
+solutions[19] is right, A..1, B..7, C..2, cost..2190.350830
+solutions[20] is right, A..1, B..8, C..1, cost..2223.987793
+solutions[21] is right, A..1, B..9, C..0, cost..2257.616455
+solutions[22] is wrong
+solutions[23] is right, A..2, B..1, C..7, cost..2306.863281
+solutions[24] is right, A..2, B..2, C..6, cost..2345.405518
+solutions[25] is right, A..2, B..3, C..5, cost..2119.955566
+solutions[26] is right, A..2, B..4, C..4, cost..2151.152588
+solutions[27] is wrong
+solutions[28] is right, A..2, B..6, C..2, cost..2252.619385
+solutions[29] is right, A..2, B..7, C..1, cost..2229.822998
+solutions[30] is right, A..2, B..8, C..0, cost..2334.246826
+solutions[31] is right, A..3, B..0, C..7, cost..2472.592529
+solutions[32] is right, A..3, B..1, C..6, cost..2380.520264
+solutions[33] is wrong
+solutions[34] is wrong
+solutions[35] is wrong
+solutions[36] is right, A..3, B..5, C..2, cost..2454.263672
+solutions[37] is wrong
+solutions[38] is right, A..3, B..7, C..0, cost..2385.854004
+solutions[39] is right, A..4, B..0, C..6, cost..2399.486084
+solutions[40] is wrong
+solutions[41] is wrong
+solutions[42] is right, A..4, B..3, C..3, cost..2514.538574
+solutions[43] is wrong
+solutions[44] is wrong
+solutions[45] is wrong
+solutions[46] is wrong
+solutions[47] is right, A..5, B..1, C..4, cost..2519.126709
+solutions[48] is right, A..5, B..2, C..3, cost..2577.635010
+solutions[49] is right, A..5, B..3, C..2, cost..2422.375977
+solutions[50] is wrong
+solutions[51] is right, A..5, B..5, C..0, cost..2496.262939
+solutions[52] is right, A..6, B..0, C..4, cost..2597.763428
+solutions[53] is wrong
+solutions[54] is wrong
+solutions[55] is wrong
+solutions[56] is wrong
+solutions[57] is wrong
+solutions[58] is wrong
+solutions[59] is wrong
+solutions[60] is wrong
+solutions[61] is wrong
+solutions[62] is wrong
+solutions[63] is wrong
+solutions[64] is wrong
+solutions[65] is wrong
+solutions[66] is wrong
+best solution is 25
